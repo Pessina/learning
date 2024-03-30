@@ -5,7 +5,7 @@ pub mod hosting {
     }
 }
 
-mod serving {
+pub mod serving {
     fn print_bye() {
         println!("Bye")
     }
