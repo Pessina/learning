@@ -10,13 +10,13 @@ fn main() {
     ];
 
     let median = exercise_1::median(&mut vec);
-    println!("Median: {median}");
+    println!("Median: {}", median);
 
     let mode = exercise_1::mode(&mut vec);
-    println!("Mode: {mode}");
+    println!("Mode: {}", mode);
 
     let pig_latin = exercise_2::to_pig_latin(String::from("aelipe"));
-    println!("{pig_latin}");
+    println!("Pig Latin: {}", pig_latin);
 
     let mut company = exercise_3::Company {
         departments: HashMap::<String, Vec<String>>::new(),
@@ -35,29 +35,20 @@ fn main() {
 
     let all = company.get_all();
 
-    println!("IT:");
-    for i in it {
-        print!("{i} ")
-    }
+    println!("IT Department:");
+    println!("{}", it.join(", "));
 
-    println!("Sales:");
-    for i in sales {
-        print!("{i} ")
-    }
+    println!("Sales Department:");
+    println!("{}", sales.join(", "));
 
-    println!("Invalid:");
+    println!("Invalid Department:");
     match invalid {
         Some(value) => {
-            println!();
-            for i in value {
-                print!("{i} ")
-            }
+            println!("{}", value.join(", "));
         }
         None => println!("None"),
     }
 
-    println!("All");
-    for i in all {
-        print!("{i} ")
-    }
+    println!("All Employees:");
+    println!("{}", all.join(", "));
 }
