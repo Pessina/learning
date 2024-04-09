@@ -1,4 +1,5 @@
 pub mod exercise_1;
+pub mod exercise_2;
 
 fn main() {
     let mut vec = vec![
@@ -10,4 +11,7 @@ fn main() {
 
     let mode = exercise_1::mode(&mut vec);
     println!("Mode: {mode}");
+
+    let pig_latin = exercise_2::to_pig_latin(String::from("aelipe"));
+    println!("{pig_latin}")
 }
