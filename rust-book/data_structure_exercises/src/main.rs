@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter, process::CommandArgs};
+use std::collections::HashMap;
 
 pub mod exercise_1;
 pub mod exercise_2;
