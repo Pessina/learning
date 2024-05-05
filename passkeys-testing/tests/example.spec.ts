@@ -48,6 +48,61 @@ test("credential creation and retrieval", async ({ page }) => {
   console.log("Retrieved Credential:", retrievedCredential);
 });
 
+test("test2", async ({ page }) => {
+  const email = faker.internet.email();
+  await page.goto("https://passkeys.io");
+
+  const client = await page.context().newCDPSession(page);
+  // Disable UI for automated testing
+  await client.send("WebAuthn.enable", { enableUI: false });
+
+  const result = await client.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      // Necessary to trigger passkey automatically.
+      // Not clear what I have to do in case I set it to false, I have to basically manually submit the passkeys
+      automaticPresenceSimulation: true,
+    },
+  });
+  const authenticatorId = result.authenticatorId;
+
+  client.on("WebAuthn.credentialAdded", () => {
+    console.log("WebAuthn.credentialAdded");
+  });
+  client.on("WebAuthn.credentialAsserted", () => {
+    console.log("WebAuthn.credentialAsserted");
+  });
+
+  await page.getByRole("textbox", { name: "Email" }).fill(email);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Sign up" }).click();
+
+  await createPasskey({
+    client: client,
+    email,
+    authenticatorId: authenticatorId,
+    rpId: "passkeys.io",
+  });
+
+  await page.getByRole("button", { name: "Create a passkey" }).click();
+
+  await expect(
+    page.getByText("Used for passcode authentication.")
+  ).toBeVisible();
+
+  const credentials = await client.send("WebAuthn.getCredentials", {
+    authenticatorId,
+  });
+
+  for (const c of credentials.credentials) {
+    console.log(c);
+  }
+});
+
 async function createPasskey({
   client,
   email,
@@ -97,70 +152,3 @@ async function createPasskey({
 
   return btoa(credentialId);
 }
-
-test("test2", async ({ page }) => {
-  const email = faker.internet.email();
-  await page.goto("https://passkeys.io");
-
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable", { enableUI: true });
-
-  const result = await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: false,
-      isUserVerified: true,
-      automaticPresenceSimulation: false,
-    },
-  });
-  const authenticatorId = result.authenticatorId;
-
-  client.on("WebAuthn.credentialAdded", () => {
-    console.log("WebAuthn.credentialAdded");
-  });
-  client.on("WebAuthn.credentialAsserted", () => {
-    console.log("WebAuthn.credentialAsserted");
-  });
-
-  await page.waitForTimeout(3000);
-
-  await client.send("WebAuthn.setUserVerified", {
-    authenticatorId: authenticatorId,
-    isUserVerified: true,
-  });
-
-  await client.send("WebAuthn.setAutomaticPresenceSimulation", {
-    authenticatorId: authenticatorId,
-    enabled: false,
-  });
-
-  await page.getByRole("textbox", { name: "Email" }).fill(email);
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByRole("button", { name: "Sign up" }).click();
-
-  await page.getByRole("button", { name: "Create a passkey" }).click();
-
-  await page.waitForTimeout(10000);
-
-  const credentialId = await createPasskey({
-    client: client,
-    email,
-    authenticatorId: authenticatorId,
-    rpId: "passkeys.io",
-  });
-
-  const credential = await client.send("WebAuthn.getCredential", {
-    authenticatorId,
-    credentialId,
-  });
-
-  console.log({ credential });
-
-  // set automaticPresenceSimulation option back to false
-  await client.send("WebAuthn.setAutomaticPresenceSimulation", {
-    authenticatorId,
-    enabled: false,
-  });
-});
