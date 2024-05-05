@@ -1,74 +1,85 @@
+import { faker } from "@faker-js/faker";
 import { test, expect, CDPSession } from "@playwright/test";
 import crypto from "crypto";
 
 let client: CDPSession;
 let authenticatorId: string;
 
-test.beforeEach(async ({ page }) => {
-  await page.goto("https://passkeys.eu");
+// test.beforeEach(async ({ page }) => {
+//   client = await page.context().newCDPSession(page);
+//   await client.send("WebAuthn.enable", { enableUI: true });
 
-  client = await page.context().newCDPSession(page);
+//   const result = await client.send("WebAuthn.addVirtualAuthenticator", {
+//     options: {
+//       protocol: "ctap2",
+//       transport: "internal",
+//       hasResidentKey: true,
+//       hasUserVerification: false,
+//       isUserVerified: true,
+//       automaticPresenceSimulation: false,
+//     },
+//   });
+//   authenticatorId = result.authenticatorId;
 
-  // Enable WebAuthn environment in this session
-  await client.send("WebAuthn.enable", { enableUI: true });
+//   await page.goto("https://passkeys.io");
+// });
 
-  // Attach a virtual authenticator with specific options
-  const result = await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      transport: "internal",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      automaticPresenceSimulation: true,
-    },
-  });
-  authenticatorId = result.authenticatorId;
-});
+// test.afterEach(async () => {
+//   await client.send("WebAuthn.clearCredentials", { authenticatorId });
 
-test("has correct title", async ({ page }) => {
-  await expect(page.locator("h1")).toHaveText("Passkeys demo");
-});
-
-test("login works", async ({ page }) => {
-  await page
-    .getByRole("textbox", { name: "Email address" })
-    .fill("sssdsfds@gmail.com");
-
-  await page.getByRole("button", { name: "Passkey signup" }).click();
-  await page.getByRole("button", { name: "Create your account" }).click();
-  await expect(page.getByText("You're logged in.")).toBeVisible({
-    timeout: 30000,
-  });
-});
+//   await client.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
+// });
 
 test("credential creation and retrieval", async ({ page }) => {
-  // Generate an ECDSA key pair with P-256 curve
-  const keyPair = await crypto.subtle.generateKey(
+  const credentialId = await createPasskey({
+    client: client,
+    email: "test@gmail.com",
+    authenticatorId: authenticatorId,
+    rpId: "www.passkeys.io",
+  });
+
+  await page.getByRole("button", { name: "Sign in with a passkey" }).click();
+
+  const retrievedCredential = await client.send("WebAuthn.getCredential", {
+    authenticatorId,
+    credentialId,
+  });
+
+  console.log("Retrieved Credential:", retrievedCredential);
+});
+
+async function createPasskey({
+  client,
+  email,
+  authenticatorId,
+  rpId,
+}: {
+  client: CDPSession;
+  email: string;
+  authenticatorId: string;
+  rpId: string;
+}): Promise<string> {
+  const keyPair = (await crypto.subtle.generateKey(
     {
       name: "ECDSA",
       namedCurve: "P-256",
     },
     true,
     ["sign", "verify"]
-  );
+  )) as CryptoKeyPair;
 
-  // Export the private key in PKCS#8 format
-  const pkcs8PrivateKey = await crypto.subtle.exportKey(
+  const pkcs8PrivateKey = (await crypto.subtle.exportKey(
     "pkcs8",
     keyPair.privateKey
-  );
+  )) as ArrayBuffer;
 
-  // Convert the ArrayBuffer to a base64 string
   const base64PrivateKey = btoa(
     String.fromCharCode.apply(null, new Uint8Array(pkcs8PrivateKey))
   );
 
   const credentialId = crypto.randomUUID();
 
-  // Assuming `base64PrivateKey` contains a valid ECDSA P-256 private key in PKCS#8 format
-
-  const userHandle = btoa("some-user-identifier");
+  const userHandle = btoa(email);
 
   const credential = {
     credentialId: btoa(credentialId),
@@ -76,30 +87,80 @@ test("credential creation and retrieval", async ({ page }) => {
     privateKey: base64PrivateKey,
     signCount: 0,
     userHandle: userHandle,
-    rpId: "example.com",
+    rpId,
   };
-
-  console.log({
-    authenticatorId,
-    credential,
-  });
 
   await client.send("WebAuthn.addCredential", {
     authenticatorId,
     credential,
   });
 
-  // Retrieve the credential just added
-  const retrievedCredential = await client.send("WebAuthn.getCredential", {
-    authenticatorId,
-    credentialId: btoa(credentialId),
+  return btoa(credentialId);
+}
+
+test("test2", async ({ page }) => {
+  const email = faker.internet.email();
+  await page.goto("https://passkeys.io");
+
+  const client = await page.context().newCDPSession(page);
+  await client.send("WebAuthn.enable", { enableUI: true });
+
+  const result = await client.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: false,
+      isUserVerified: true,
+      automaticPresenceSimulation: false,
+    },
+  });
+  const authenticatorId = result.authenticatorId;
+
+  client.on("WebAuthn.credentialAdded", () => {
+    console.log("WebAuthn.credentialAdded");
+  });
+  client.on("WebAuthn.credentialAsserted", () => {
+    console.log("WebAuthn.credentialAsserted");
   });
 
-  console.log("Retrieved Credential:", retrievedCredential);
+  await page.waitForTimeout(3000);
 
-  // Clear all credentials from the authenticator
-  await client.send("WebAuthn.clearCredentials", { authenticatorId });
+  await client.send("WebAuthn.setUserVerified", {
+    authenticatorId: authenticatorId,
+    isUserVerified: true,
+  });
 
-  // Remove the virtual authenticator
-  await client.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId });
+  await client.send("WebAuthn.setAutomaticPresenceSimulation", {
+    authenticatorId: authenticatorId,
+    enabled: false,
+  });
+
+  await page.getByRole("textbox", { name: "Email" }).fill(email);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Sign up" }).click();
+
+  await page.getByRole("button", { name: "Create a passkey" }).click();
+
+  await page.waitForTimeout(10000);
+
+  const credentialId = await createPasskey({
+    client: client,
+    email,
+    authenticatorId: authenticatorId,
+    rpId: "passkeys.io",
+  });
+
+  const credential = await client.send("WebAuthn.getCredential", {
+    authenticatorId,
+    credentialId,
+  });
+
+  console.log({ credential });
+
+  // set automaticPresenceSimulation option back to false
+  await client.send("WebAuthn.setAutomaticPresenceSimulation", {
+    authenticatorId,
+    enabled: false,
+  });
 });

@@ -12,6 +12,7 @@
     "@types/node": "^20.12.8"
   },
   "dependencies": {
+    "@faker-js/faker": "^8.4.1",
     "crypto": "^1.0.1"
   }
 }
