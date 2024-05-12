@@ -19,38 +19,62 @@ async function extractBookContent(filePath: string): Promise<void> {
     const KEY = "page-range.pdf";
 
     const fileContent = readFileSync(filePath);
-    const params = {
-      Bucket: BUCKET_NAME,
-      Key: KEY,
-      Body: fileContent,
-    };
 
-    const s3 = new S3Client({ region: REGION });
-    await s3.send(new PutObjectCommand(params));
+    const s3: S3Client = new S3Client({ region: REGION });
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: KEY,
+        Body: fileContent,
+      })
+    );
 
     const command = new StartDocumentAnalysisCommand({
       DocumentLocation: {
-        S3Object: { Bucket: BUCKET_NAME, Name: KEY },
+        S3Object: {
+          Bucket: BUCKET_NAME,
+          Name: KEY,
+        },
       },
       FeatureTypes: [FeatureType.TABLES, FeatureType.LAYOUT],
     });
+
     const { JobId } = await client.send(command);
-    const getResultCommand = new GetDocumentAnalysisCommand({ JobId });
-    let response;
+
+    let nextToken: string | undefined = "initial";
+    let pages: Block[] = [];
+
     do {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      response = await client.send(getResultCommand);
-    } while (response.JobStatus === "IN_PROGRESS");
+      await new Promise<void>((resolve) => setTimeout(resolve, 5000));
 
-    const blocks: Block[] = response.Blocks || [];
+      const getResultCommand: GetDocumentAnalysisCommand =
+        new GetDocumentAnalysisCommand({
+          JobId,
+          MaxResults: 1000,
+          ...(nextToken !== "initial" ? { NextToken: nextToken } : {}),
+        });
 
-    const layoutBlocks = extractLayoutBlocks(blocks);
-    const tableBlocks = extractTableBlocks(blocks);
+      const response = await client.send(getResultCommand);
+
+      if (response.JobStatus === "IN_PROGRESS") {
+        continue;
+      } else if (response.JobStatus === "SUCCEEDED" && response.Blocks) {
+        pages = pages.concat(response.Blocks);
+        nextToken = response.NextToken;
+      } else if (response.JobStatus === "FAILED") {
+        throw new Error(`Document analysis failed: ${response.StatusMessage}`);
+      }
+    } while (nextToken);
+
+    console.log(pages);
+
+    const layoutBlocks = extractLayoutBlocks(pages);
+    const tableBlocks = extractTableBlocks(pages);
 
     const extractedText = combineLayoutAndTableContent(
       layoutBlocks,
       tableBlocks,
-      blocks
+      pages
     );
 
     console.log(extractedText);
