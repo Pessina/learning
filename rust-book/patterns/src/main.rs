@@ -94,4 +94,22 @@ fn main() {
         4 | 6 | 8 if y => println!("yes"),
         _ => println!("no"),
     }
+
+    enum Message {
+        Hello { id: i32 },
+    }
+
+    let msg = Message::Hello { id: 4 };
+
+    match msg {
+        Message::Hello {
+            id: message_id @ 0..=5,
+        } => println!("Message id found in rage 0 to 5 {message_id}"),
+        Message::Hello { id: 6..=30 } => println!("Message id found in rage 6, 30"),
+        Message::Hello { id } => {
+            println!("Message id: {id}")
+        }
+    }
+
+    let a = [(0, 1)];
 }
