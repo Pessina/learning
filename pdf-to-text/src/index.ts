@@ -19,6 +19,7 @@ async function extractBookContent(filePath: string): Promise<void> {
     const response = await client.send(command);
 
     const blocks: Block[] = response.Blocks || [];
+
     const layoutBlocks = extractLayoutBlocks(blocks);
     const tableBlocks = extractTableBlocks(blocks);
 
@@ -62,14 +63,18 @@ function combineLayoutAndTableContent(
   let combinedText = "";
 
   layoutBlocks.forEach((block) => {
-    const pageText =
-      getTextFromBlocks(block.Relationships ?? [], rootBlocks) + "\n";
-    combinedText += pageText + "\n\n";
-  });
-
-  tableBlocks.forEach((block) => {
-    combinedText +=
-      "Table:\n" + printTableAsCSV(block ?? [], rootBlocks) + "\n\n";
+    if (block.BlockType === "LAYOUT_TABLE" && tableBlocks.length > 0) {
+      const table = tableBlocks.shift();
+      if (table) {
+        combinedText +=
+          printTableAsCSV(table, rootBlocks, tableBlocks) + "\n\n";
+      }
+    } else {
+      const pageText =
+        getTextFromBlocks(block.Relationships ?? [], rootBlocks, tableBlocks) +
+        "\n";
+      combinedText += pageText + "\n";
+    }
   });
 
   return combinedText;
@@ -77,7 +82,8 @@ function combineLayoutAndTableContent(
 
 function getTextFromBlocks(
   relationships: Relationship[],
-  blocks: Block[]
+  blocks: Block[],
+  tableBlocks: Block[]
 ): string {
   let combinedText = "";
 
@@ -87,16 +93,15 @@ function getTextFromBlocks(
         const block = blocks.find((b) => b.Id === childId);
         if (!block) {
           return;
-        }
-
-        if (
+        } else if (
           block.Relationships &&
           block.Relationships.some((rel) => rel.Type === "CHILD")
         ) {
           combinedText +=
             getTextFromBlocks(
               block.Relationships.filter((rel) => rel.Type === "CHILD"),
-              blocks
+              blocks,
+              tableBlocks
             ) + " ";
         } else {
           combinedText += block.Text + " " || "";
@@ -108,7 +113,11 @@ function getTextFromBlocks(
   return combinedText.trim();
 }
 
-function printTableAsCSV(tableBlock: Block, blocks: Block[]): string {
+function printTableAsCSV(
+  tableBlock: Block,
+  blocks: Block[],
+  tableBlocks: Block[]
+): string {
   if (tableBlock.BlockType !== "TABLE") {
     return "Invalid block type for table.";
   }
@@ -123,23 +132,22 @@ function printTableAsCSV(tableBlock: Block, blocks: Block[]): string {
       const rowIndex = cellBlock.RowIndex ?? 0;
       const columnIndex = cellBlock.ColumnIndex ?? 0;
 
-      // Ensure rows array has enough subarrays to include this cell
       while (rows.length <= rowIndex) {
         rows.push([]);
       }
 
-      // Get the text from the cell
-      const cellText = getTextFromBlocks(cellBlock.Relationships ?? [], blocks);
+      const cellText = getTextFromBlocks(
+        cellBlock.Relationships ?? [],
+        blocks,
+        tableBlocks
+      );
 
-      // Place the cell text in the correct column
       rows[rowIndex][columnIndex] = cellText;
     }
   });
 
-  // Convert rows to CSV format
   const csvContent = rows
     .map((row) => {
-      // Fill undefined cells with empty strings and join with commas
       return row.map((cell) => cell ?? "").join(",");
     })
     .join("\n");
