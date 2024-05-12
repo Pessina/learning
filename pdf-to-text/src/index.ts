@@ -38,7 +38,7 @@ async function extractBookContent(filePath: string): Promise<void> {
     const getResultCommand = new GetDocumentAnalysisCommand({ JobId });
     let response;
     do {
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait for 5 seconds before checking the job status again
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       response = await client.send(getResultCommand);
     } while (response.JobStatus === "IN_PROGRESS");
 
