@@ -1,7 +1,6 @@
 import {
   TextractClient,
   AnalyzeDocumentCommand,
-  AnalyzeDocumentCommandInput,
   Block,
   FeatureType,
   Relationship,
@@ -13,20 +12,22 @@ const client = new TextractClient({ region: "us-west-2" });
 async function extractBookContent(filePath: string): Promise<void> {
   try {
     const fileContent = readFileSync(filePath);
-    const params: AnalyzeDocumentCommandInput = {
+    const command = new AnalyzeDocumentCommand({
       Document: { Bytes: fileContent },
       FeatureTypes: [FeatureType.TABLES, FeatureType.LAYOUT],
-    };
-    const command = new AnalyzeDocumentCommand(params);
+    });
     const response = await client.send(command);
+
     const blocks: Block[] = response.Blocks || [];
     const layoutBlocks = extractLayoutBlocks(blocks);
     const tableBlocks = extractTableBlocks(blocks);
+
     const extractedText = combineLayoutAndTableContent(
       layoutBlocks,
       tableBlocks,
       blocks
     );
+
     console.log(extractedText);
   } catch (error) {
     console.error("Error:", error);
@@ -60,27 +61,21 @@ function combineLayoutAndTableContent(
 ): string {
   let combinedText = "";
 
-  console.log(JSON.stringify(layoutBlocks[0]));
-  console.log(JSON.stringify(layoutBlocks[1]));
-  console.log(JSON.stringify(layoutBlocks[2]));
-  // Iterate over the PAGE blocks
   layoutBlocks.forEach((block) => {
     const pageText =
-      "Layout: " +
-      getTextFromBlocksById(block.Relationships ?? [], rootBlocks) +
-      "\n\n";
+      getTextFromBlocks(block.Relationships ?? [], rootBlocks) + "\n";
     combinedText += pageText + "\n\n";
   });
 
-  // Process table blocks
   tableBlocks.forEach((block) => {
-    combinedText += "Table:\n" + block.Text + "\n\n";
+    combinedText +=
+      "Table:\n" + printTableAsCSV(block ?? [], rootBlocks) + "\n\n";
   });
 
   return combinedText;
 }
 
-function getTextFromBlocksById(
+function getTextFromBlocks(
   relationships: Relationship[],
   blocks: Block[]
 ): string {
@@ -94,19 +89,17 @@ function getTextFromBlocksById(
           return;
         }
 
-        // If the block has a relationship of type 'CHILD', recursively get text from child blocks
         if (
           block.Relationships &&
           block.Relationships.some((rel) => rel.Type === "CHILD")
         ) {
           combinedText +=
-            getTextFromBlocksByRelationship(
+            getTextFromBlocks(
               block.Relationships.filter((rel) => rel.Type === "CHILD"),
               blocks
             ) + " ";
         } else {
-          // If it's a final node, return its text
-          combinedText += block.Text || "";
+          combinedText += block.Text + " " || "";
         }
       });
     }
@@ -115,37 +108,43 @@ function getTextFromBlocksById(
   return combinedText.trim();
 }
 
-function getTextFromBlocksByRelationship(
-  relationships: Relationship[],
-  blocks: Block[]
-): string {
-  let combinedText = "";
+function printTableAsCSV(tableBlock: Block, blocks: Block[]): string {
+  if (tableBlock.BlockType !== "TABLE") {
+    return "Invalid block type for table.";
+  }
 
-  relationships.forEach((relationship) => {
-    relationship.Ids?.forEach((childId) => {
-      const block = blocks.find((b) => b.Id === childId);
-      if (!block) {
-        return;
+  const rows: string[][] = [];
+  const childIds =
+    tableBlock.Relationships?.find((rel) => rel.Type === "CHILD")?.Ids ?? [];
+
+  childIds.forEach((cellId) => {
+    const cellBlock = blocks.find((block) => block.Id === cellId);
+    if (cellBlock && cellBlock.BlockType === "CELL") {
+      const rowIndex = cellBlock.RowIndex ?? 0;
+      const columnIndex = cellBlock.ColumnIndex ?? 0;
+
+      // Ensure rows array has enough subarrays to include this cell
+      while (rows.length <= rowIndex) {
+        rows.push([]);
       }
 
-      // If the block has a relationship of type 'CHILD', recursively get text from child blocks
-      if (
-        block.Relationships &&
-        block.Relationships.some((rel) => rel.Type === "CHILD")
-      ) {
-        combinedText +=
-          getTextFromBlocksByRelationship(
-            block.Relationships.filter((rel) => rel.Type === "CHILD"),
-            blocks
-          ) + " ";
-      } else {
-        // If it's a final node, return its text
-        combinedText += block.Text || "";
-      }
-    });
+      // Get the text from the cell
+      const cellText = getTextFromBlocks(cellBlock.Relationships ?? [], blocks);
+
+      // Place the cell text in the correct column
+      rows[rowIndex][columnIndex] = cellText;
+    }
   });
 
-  return combinedText.trim();
+  // Convert rows to CSV format
+  const csvContent = rows
+    .map((row) => {
+      // Fill undefined cells with empty strings and join with commas
+      return row.map((cell) => cell ?? "").join(",");
+    })
+    .join("\n");
+
+  return csvContent;
 }
 
 const bookFilePath = "./books/page.pdf";
