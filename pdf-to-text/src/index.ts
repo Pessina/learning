@@ -8,17 +8,22 @@ import {
 } from "@aws-sdk/client-textract";
 import { readFileSync } from "fs";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { writeFileSync, mkdirSync } from "fs";
+import { dirname } from "path";
 
 const REGION = "us-east-1";
 
 const client = new TextractClient({ region: REGION });
 
-async function extractBookContent(filePath: string): Promise<void> {
+async function extractBookContent(
+  inputFilePath: string,
+  outputFilePath: string
+): Promise<void> {
   try {
     const BUCKET_NAME = "pessina-textract-docs";
     const KEY = "page-range.pdf";
 
-    const fileContent = readFileSync(filePath);
+    const fileContent = readFileSync(inputFilePath);
 
     const s3: S3Client = new S3Client({ region: REGION });
     await s3.send(
@@ -56,6 +61,8 @@ async function extractBookContent(filePath: string): Promise<void> {
 
       const response = await client.send(getResultCommand);
 
+      console.log(response.JobStatus);
+
       if (response.JobStatus === "IN_PROGRESS") {
         continue;
       } else if (response.JobStatus === "SUCCEEDED" && response.Blocks) {
@@ -66,8 +73,6 @@ async function extractBookContent(filePath: string): Promise<void> {
       }
     } while (nextToken);
 
-    console.log(pages);
-
     const layoutBlocks = extractLayoutBlocks(pages);
     const tableBlocks = extractTableBlocks(pages);
 
@@ -77,7 +82,8 @@ async function extractBookContent(filePath: string): Promise<void> {
       pages
     );
 
-    console.log(extractedText);
+    mkdirSync(dirname(outputFilePath), { recursive: true });
+    writeFileSync(outputFilePath, extractedText);
   } catch (error) {
     console.error("Error:", error);
   }
@@ -203,5 +209,6 @@ function printTableAsCSV(
   return csvContent;
 }
 
-const bookFilePath = "./books/page-range.pdf";
-extractBookContent(bookFilePath);
+const inputFile = "./books/page.pdf";
+const outputFile = "./out/page.txt";
+extractBookContent(inputFile, outputFile);
