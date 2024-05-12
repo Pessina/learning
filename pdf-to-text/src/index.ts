@@ -1,22 +1,46 @@
 import {
   TextractClient,
-  AnalyzeDocumentCommand,
   Block,
   FeatureType,
   Relationship,
+  StartDocumentAnalysisCommand,
+  GetDocumentAnalysisCommand,
 } from "@aws-sdk/client-textract";
 import { readFileSync } from "fs";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-const client = new TextractClient({ region: "us-west-2" });
+const REGION = "us-east-1";
+
+const client = new TextractClient({ region: REGION });
 
 async function extractBookContent(filePath: string): Promise<void> {
   try {
+    const BUCKET_NAME = "pessina-textract-docs";
+    const KEY = "page-range.pdf";
+
     const fileContent = readFileSync(filePath);
-    const command = new AnalyzeDocumentCommand({
-      Document: { Bytes: fileContent },
+    const params = {
+      Bucket: BUCKET_NAME,
+      Key: KEY,
+      Body: fileContent,
+    };
+
+    const s3 = new S3Client({ region: REGION });
+    await s3.send(new PutObjectCommand(params));
+
+    const command = new StartDocumentAnalysisCommand({
+      DocumentLocation: {
+        S3Object: { Bucket: BUCKET_NAME, Name: KEY },
+      },
       FeatureTypes: [FeatureType.TABLES, FeatureType.LAYOUT],
     });
-    const response = await client.send(command);
+    const { JobId } = await client.send(command);
+    const getResultCommand = new GetDocumentAnalysisCommand({ JobId });
+    let response;
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait for 5 seconds before checking the job status again
+      response = await client.send(getResultCommand);
+    } while (response.JobStatus === "IN_PROGRESS");
 
     const blocks: Block[] = response.Blocks || [];
 
@@ -155,5 +179,5 @@ function printTableAsCSV(
   return csvContent;
 }
 
-const bookFilePath = "./books/page.pdf";
+const bookFilePath = "./books/page-range.pdf";
 extractBookContent(bookFilePath);
