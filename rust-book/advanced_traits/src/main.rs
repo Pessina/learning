@@ -1,4 +1,5 @@
-use std::ops::Add;
+use core::fmt;
+use std::{fmt::write, ops::Add};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct Point {
@@ -70,6 +71,44 @@ impl Human {
     }
 }
 
+trait OutlinePrint: fmt::Display {
+    fn print_outline(&self) {
+        let output = self.to_string();
+        let len = output.len();
+        println!("{}", "*".repeat(len));
+        println!("*{}*", "*".repeat(len - 2));
+        println!("* {} *", output);
+        println!("*{}*", "*".repeat(len - 2));
+        println!("{}", "*".repeat(len));
+    }
+}
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+impl OutlinePrint for Point {
+    fn print_outline(&self) {
+        let output = self.to_string();
+        let len = output.len();
+        println!("{}", "*".repeat(len + 4));
+        println!("*{}*", " ".repeat(len + 2));
+        println!("* {} *", output);
+        println!("*{}*", " ".repeat(len + 2));
+        println!("{}", "*".repeat(len + 4));
+    }
+}
+
+struct Wrapper(Vec<String>);
+
+impl fmt::Display for Wrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}]", self.0.join(", "))
+    }
+}
+
 fn main() {
     let mut p1 = Point { x: 1, y: 1 };
     let p2 = Point { x: 2, y: 2 };
@@ -91,4 +130,17 @@ fn main() {
     human.fly();
     Pilot::fly(&human);
     Wizard::fly(&human);
+
+    p1.print_outline();
+
+    let mut v = Wrapper(vec![
+        String::from("1"),
+        String::from("2"),
+        String::from("3"),
+        String::from("4"),
+    ]);
+
+    v.0.push(String::from("Felipe"));
+
+    println!("Printing my vector of string, {}", v)
 }
