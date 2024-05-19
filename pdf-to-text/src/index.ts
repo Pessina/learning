@@ -209,6 +209,7 @@ function printTableAsCSV(
   return csvContent;
 }
 
-const inputFile = "./books/page.pdf";
+const inputFile = "./books/main-book.pdf";
+// const inputFile = "../books/main-book.pdf";
 const outputFile = "./out/page.txt";
 extractBookContent(inputFile, outputFile);
