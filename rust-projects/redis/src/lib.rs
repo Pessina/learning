@@ -28,28 +28,21 @@ pub enum Types {
 /// assert_eq!(command, "");
 /// ```
 pub fn deserialize_flat_command(command: &mut &str) -> Types {
-    match command.chars().next() {
-        Some('+') | Some('-') => {
-            if let Some(pos) = command.find("\r\n") {
-                let simple_str = &command[..pos];
-                *command = &command[pos + 2..];
-                Types::String(simple_str[1..].to_string())
-            } else {
-                panic!("Command not recognized")
-            }
-        }
-        Some(':') => {
-            if let Some(pos) = command.find("\r\n") {
-                let simple_str = &command[..pos];
-                *command = &command[pos + 2..];
-                Types::Number(simple_str[1..].parse::<i64>().expect("To be a number"))
-            } else {
-                panic!("Command not recognized")
-            }
-        }
-        _ => {
-            panic!("Command not recognized")
-        }
+    if let Some(pos) = command.find("\r\n") {
+        let simple_str = &command[..pos];
+        let first_char = simple_str.chars().next().expect("Command not recognized");
+
+        let ret = match first_char {
+            '+' | '-' => Types::String(simple_str[1..].to_string()),
+            ':' => Types::Number(simple_str[1..].parse::<i64>().expect("To be a number")),
+            _ => panic!("Command not recognized"),
+        };
+
+        *command = &command[pos + 2..];
+
+        ret
+    } else {
+        panic!("Command not recognized")
     }
 }
 
@@ -196,6 +189,34 @@ mod tests {
         let result = deserialize_flat_command(&mut command);
         assert_eq!(result, Types::Number(0));
         assert_eq!(command, "");
+    }
+
+    #[test]
+    #[should_panic(expected = "Command not recognized")]
+    fn it_should_de_serialize_number_empty() {
+        let mut command = "";
+
+        let result = deserialize_flat_command(&mut command);
+        assert_eq!(result, Types::Number(0));
+        assert_eq!(command, "");
+    }
+
+    #[test]
+    fn it_should_de_serialize_return_remaining_command() {
+        let mut command = ":0\r\n$4\r\necho\r\n";
+
+        let result = deserialize_flat_command(&mut command);
+        assert_eq!(result, Types::Number(0));
+        assert_eq!(command, "$4\r\necho\r\n");
+    }
+
+    #[test]
+    fn it_should_de_serialize_return_remaining_command_2() {
+        let mut command = "+hello\r\n$4\r\necho\r\n+echo\r\n-Error Message\r\n";
+
+        let result = deserialize_flat_command(&mut command);
+        assert_eq!(result, Types::String("hello".to_string()));
+        assert_eq!(command, "$4\r\necho\r\n+echo\r\n-Error Message\r\n");
     }
 
     // #[test]
