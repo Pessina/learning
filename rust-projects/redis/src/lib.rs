@@ -2,6 +2,7 @@
 pub enum Types {
     String(String),
     Number(i64),
+    Array(Box<Vec<Types>>),
 }
 
 // pub fn deserialize_command(command: Vec<&str>) {}
@@ -87,20 +88,24 @@ pub fn deserialize_array(command: &str) -> Option<Vec<Types>> {
                         let result = deserialize_integer(&current);
                         ret.push(Types::Number(result));
                     }
-                    '$' => {
-                        let remaining: Vec<&str> = t.splitn(3, "\r\n").collect();
-                        let current = format!("{}{}{}", remaining[0], "\r\n", remaining[1]);
-                        rest = remaining[2];
+                    '$' => match deserialize_bulk_string(&t) {
+                        Some(result) => {
+                            let remaining: Vec<&str> = t.splitn(2, &result.to_string()).collect();
+                            rest = remaining[1].splitn(2, "\r\n").skip(1).next().unwrap();
 
-                        match deserialize_bulk_string(&current) {
-                            Some(result) => ret.push(Types::String(result)),
-                            None => {}
+                            println!("{:?}", rest);
+
+                            ret.push(Types::String(result));
                         }
-                    }
-                    // '*' => {
-                    //     let result = deserialize_array(&current);
-                    //     ret.push(Types::String(result));
-                    // }
+                        None => {}
+                    },
+                    '*' => match deserialize_array(&t) {
+                        Some(result) => {
+                            rest = &t;
+                            ret.push(Types::Array(Box::new(result)))
+                        }
+                        None => {}
+                    },
                     _ => {}
                 }
 
@@ -109,7 +114,7 @@ pub fn deserialize_array(command: &str) -> Option<Vec<Types>> {
                 t = rest.chars().collect();
             }
 
-            Some(Vec::new())
+            Some(ret)
         }
     }
 }
@@ -183,6 +188,8 @@ mod tests {
     #[test]
     #[ignore]
     fn it_should_deserialize_array() {
-        deserialize_array("*3\r\n+echo\r\n:11\r\n$4\r\n1234\r\n");
+        deserialize_array(
+            "*4\r\n+echo\r\n:11\r\n$4\r\n1234\r\n*2\r\n$4\r\n1234\r\n:11\r\n$4\r\nlast\r\n",
+        );
     }
 }
