@@ -32,15 +32,13 @@ pub fn deserialize_flat_command(command: &mut &str) -> Types {
         let simple_str = &command[..pos];
         let first_char = simple_str.chars().next().expect("Command not recognized");
 
-        let ret = match first_char {
+        *command = &command[pos + 2..];
+
+        match first_char {
             '+' | '-' => Types::String(simple_str[1..].to_string()),
             ':' => Types::Number(simple_str[1..].parse::<i64>().expect("To be a number")),
             _ => panic!("Command not recognized"),
-        };
-
-        *command = &command[pos + 2..];
-
-        ret
+        }
     } else {
         panic!("Command not recognized")
     }
