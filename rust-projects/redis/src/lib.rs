@@ -4,15 +4,22 @@ pub fn de_serialize_simple_string(command: &str) -> String {
     command[1..command.len() - 2].to_string()
 }
 
-pub fn de_serialize_bulk_string(command: &str) -> String {
-    let mut chars = command[1..].chars();
-    let count: String = chars.by_ref().take_while(|c| c.is_digit(10)).collect();
+pub fn de_serialize_bulk_string(command: &str) -> Option<String> {
+    match command {
+        "$-1\r\n" => None,
+        _ => {
+            let mut chars = command[1..].chars();
+            let count: String = chars.by_ref().take_while(|c| c.is_digit(10)).collect();
 
-    chars
-        .by_ref()
-        .skip(1)
-        .take(count.parse::<usize>().expect("To be a number"))
-        .collect::<String>()
+            let ret = chars
+                .by_ref()
+                .skip(1)
+                .take(count.parse::<usize>().expect("To be a number"))
+                .collect::<String>();
+
+            Some(ret)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -32,7 +39,7 @@ mod tests {
         let test_str = "ping";
 
         let result = de_serialize_bulk_string(&format!("${}\r\n{}\r\n", test_str.len(), test_str));
-        assert_eq!(result, test_str);
+        assert_eq!(result, Some(test_str.to_string()));
     }
 
     #[test]
@@ -40,7 +47,7 @@ mod tests {
         let test_str = "";
 
         let result = de_serialize_bulk_string(&format!("${}\r\n{}\r\n", test_str.len(), test_str));
-        assert_eq!(result, test_str);
+        assert_eq!(result, Some(test_str.to_string()));
     }
 
     #[test]
@@ -48,6 +55,12 @@ mod tests {
         let test_str = "lskdfjkldsjf\n\r\n skjdhfjkdshf ";
 
         let result = de_serialize_bulk_string(&format!("${}\r\n{}\r\n", test_str.len(), test_str));
-        assert_eq!(result, test_str);
+        assert_eq!(result, Some(test_str.to_string()));
+    }
+
+    #[test]
+    fn it_should_de_serialize_bulk_string_null_elements() {
+        let result = de_serialize_bulk_string("$-1\r\n");
+        assert_eq!(result, None);
     }
 }
