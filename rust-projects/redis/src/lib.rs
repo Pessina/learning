@@ -44,6 +44,28 @@ pub fn deserialize_flat_command(command: &mut &str) -> Types {
     }
 }
 
+/// Deserialize a bulk string from the given string slice.
+///
+/// Bulk strings are prefixed with `$` followed by the length of the string and terminated by `\r\n`.
+///
+/// # Arguments
+///
+/// * `command` - A mutable reference to a string slice containing the command.
+///
+/// # Returns
+///
+/// An `Option<String>` containing the deserialized bulk string if successful, or `None` if the bulk string is null.
+///
+/// # Example
+///
+/// ```
+/// use redis::deserialize_bulk_string;
+///
+/// let mut command = "$6\r\nfoobar\r\n";
+/// let result = deserialize_bulk_string(&mut command);
+/// assert_eq!(result, Some("foobar".to_string()));
+/// assert_eq!(command, "");
+/// ```
 pub fn deserialize_bulk_string(command: &mut &str) -> Option<String> {
     if let Some(pos) = command.find("\r\n") {
         let start = pos + 2;
@@ -66,6 +88,34 @@ pub fn deserialize_bulk_string(command: &mut &str) -> Option<String> {
     panic!("Invalid Command")
 }
 
+/// Deserialize an array from the given string slice.
+///
+/// Arrays are prefixed with `*` followed by the number of elements in the array and terminated by `\r\n`.
+///
+/// # Arguments
+///
+/// * `command` - A mutable reference to a string slice containing the command.
+///
+/// # Returns
+///
+/// An `Option<Vec<Types>>` containing the deserialized array if successful, or `None` if the array is null.
+///
+/// # Example
+///
+/// ```
+/// use redis::{deserialize_array, Types};
+///
+/// let mut command = "*2\r\n+OK\r\n:1000\r\n";
+/// let result = deserialize_array(&mut command);
+/// assert_eq!(
+///     result,
+///     Some(vec![
+///         Types::String("OK".to_string()),
+///         Types::Number(1000)
+///     ])
+/// );
+/// assert_eq!(command, "");
+/// ```
 pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
     if let Some(pos) = command.find("\r\n") {
         let start = pos + 2;
@@ -100,7 +150,6 @@ pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
 
     None
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
