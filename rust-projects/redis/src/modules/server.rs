@@ -11,8 +11,8 @@ pub fn handle_connection(mut stream: TcpStream) {
         let mut buffer = [0; 1024];
 
         if let Ok(size) = stream.read(&mut buffer) {
-            let mut command = String::from_utf8_lossy(&buffer[..size]);
-            let mut command = command.to_mut().as_str();
+            let command = String::from_utf8_lossy(&buffer[..size]);
+            let mut command = command.as_ref();
 
             let result = deserialize(&mut command).unwrap();
 
