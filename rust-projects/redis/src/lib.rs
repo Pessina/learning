@@ -30,117 +30,74 @@ pub enum Types {
 pub fn deserialize_flat_command(command: &mut &str) -> Types {
     if let Some(pos) = command.find("\r\n") {
         let simple_str = &command[..pos];
-        let first_char = simple_str.chars().next().expect("Command not recognized");
+        let first_char = simple_str.chars().next().expect("Invalid Command");
 
         *command = &command[pos + 2..];
 
         match first_char {
             '+' | '-' => Types::String(simple_str[1..].to_string()),
             ':' => Types::Number(simple_str[1..].parse::<i64>().expect("To be a number")),
-            _ => panic!("Command not recognized"),
+            _ => panic!("Invalid Command"),
         }
     } else {
-        panic!("Command not recognized")
+        panic!("Invalid Command")
     }
 }
 
-// pub fn deserialize_bulk_string(command: &str) -> Option<String> {
-//     match command {
-//         "$-1\r\n" => None,
-//         _ => {
-//             let mut chars = command[1..].chars();
-//             let count: String = chars.by_ref().take_while(|c| c.is_digit(10)).collect();
+pub fn deserialize_bulk_string(command: &mut &str) -> Option<String> {
+    if let Some(pos) = command.find("\r\n") {
+        let start = pos + 2;
 
-//             let ret = chars
-//                 .by_ref()
-//                 .skip(1)
-//                 .take(count.parse::<usize>().expect("To be a number"))
-//                 .collect::<String>();
+        if let Ok(count) = command[1..pos].parse::<usize>() {
+            let string: String = command[start..].chars().take(count).collect();
+            let len = string.len() + 2;
 
-//             Some(ret)
-//         }
-//     }
-// }
+            *command = &command[start + len..];
 
-// pub fn deserialize_array(command: &str) -> Option<Vec<Types>> {
-//     match command {
-//         "*-1\r\n" => None,
-//         _ => {
-//             let mut command_chars = command.chars();
-//             let count: u64 = command_chars
-//                 .by_ref()
-//                 .skip(1)
-//                 .take_while(|c| c.is_digit(10))
-//                 .collect::<String>()
-//                 .parse()
-//                 .expect("To be a number");
+            return Some(string);
+        } else {
+            *command = &command[start..];
+            return None;
+        }
+    }
 
-//             println!("Count: {:?}", count);
+    None
+}
 
-//             let mut ret: Vec<Types> = Vec::new();
+pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
+    if let Some(pos) = command.find("\r\n") {
+        let start = pos + 2;
+        if let Ok(count) = command[1..pos].parse::<u32>() {
+            let mut ret: Vec<Types> = Vec::new();
 
-//             command_chars.by_ref().take(1).for_each(drop);
+            *command = &command[start..];
+            for _ in 0..count + 1 {
+                if let Some(first_char) = command.chars().next() {
+                    match first_char {
+                        '$' => {
+                            if let Some(result) = deserialize_bulk_string(command) {
+                                ret.push(Types::String(result))
+                            }
+                        }
+                        '*' => {
+                            if let Some(result) = deserialize_array(command) {
+                                ret.push(Types::Array(Box::new(result)))
+                            }
+                        }
+                        '+' | ':' | '-' => ret.push(deserialize_flat_command(command)),
+                        _ => panic!("Invalid command"),
+                    }
+                }
+            }
 
-//             let mut t = command_chars.by_ref().collect::<String>();
-//             for _ in 0..count {
-//                 let remaining: Vec<&str> = t.splitn(2, "\r\n").collect();
+            return Some(ret);
+        } else {
+            *command = &command[start..];
+        }
+    }
 
-//                 let mut rest: &str = "";
-//                 match remaining[0].chars().next().unwrap() {
-//                     '+' => {
-//                         let remaining: Vec<&str> = t.splitn(2, "\r\n").collect();
-//                         let current = remaining[0].to_string() + "\r\n";
-//                         rest = remaining[1];
-
-//                         let result = deserialize_simple_string(&current);
-//                         ret.push(Types::String(result));
-//                     }
-//                     '-' => {
-//                         let remaining: Vec<&str> = t.splitn(2, "\r\n").collect();
-//                         let current = remaining[0].to_string() + "\r\n";
-//                         rest = remaining[1];
-
-//                         let result = deserialize_error(&current);
-//                         ret.push(Types::String(result));
-//                     }
-//                     ':' => {
-//                         let remaining: Vec<&str> = t.splitn(2, "\r\n").collect();
-//                         let current = remaining[0].to_string() + "\r\n";
-//                         rest = remaining[1];
-
-//                         let result = deserialize_integer(&current);
-//                         ret.push(Types::Number(result));
-//                     }
-//                     '$' => match deserialize_bulk_string(&t) {
-//                         Some(result) => {
-//                             let remaining: Vec<&str> = t.splitn(2, &result.to_string()).collect();
-//                             rest = remaining[1].splitn(2, "\r\n").skip(1).next().unwrap();
-
-//                             println!("{:?}", rest);
-
-//                             ret.push(Types::String(result));
-//                         }
-//                         None => {}
-//                     },
-//                     '*' => match deserialize_array(&t) {
-//                         Some(result) => {
-//                             rest = &t;
-//                             ret.push(Types::Array(Box::new(result)))
-//                         }
-//                         None => {}
-//                     },
-//                     _ => {}
-//                 }
-
-//                 println!("Current ret: {:?}", ret);
-
-//                 t = rest.chars().collect();
-//             }
-
-//             Some(ret)
-//         }
-//     }
-// }
+    None
+}
 
 #[cfg(test)]
 mod tests {
@@ -190,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Command not recognized")]
+    #[should_panic(expected = "Invalid Command")]
     fn it_should_de_serialize_number_empty() {
         let mut command = "";
 
@@ -217,40 +174,93 @@ mod tests {
         assert_eq!(command, "$4\r\necho\r\n+echo\r\n-Error Message\r\n");
     }
 
-    // #[test]
-    // fn it_should_deserialize_bulk_string() {
-    //     let test_str = "ping";
+    #[test]
+    fn it_should_deserialize_bulk_string() {
+        let mut command = "$4\r\nping\r\n";
 
-    //     let result = deserialize_bulk_string(&format!("${}\r\n{}\r\n", test_str.len(), test_str));
-    //     assert_eq!(result, Some(test_str.to_string()));
-    // }
+        let result = deserialize_bulk_string(&mut command);
+        assert_eq!(result, Some("ping".to_string()));
+        assert_eq!(command, "");
+    }
 
-    // #[test]
-    // fn it_should_deserialize_bulk_string_0_elements() {
-    //     let test_str = "";
+    #[test]
+    fn it_should_deserialize_bulk_string_remaining_command() {
+        let mut command = "$4\r\nping\r\n:123\r\n";
 
-    //     let result = deserialize_bulk_string(&format!("${}\r\n{}\r\n", test_str.len(), test_str));
-    //     assert_eq!(result, Some(test_str.to_string()));
-    // }
+        let result = deserialize_bulk_string(&mut command);
+        assert_eq!(result, Some("ping".to_string()));
+        assert_eq!(command, ":123\r\n");
+    }
 
-    // #[test]
-    // fn it_should_deserialize_bulk_string_many_elements() {
-    //     let test_str = "lskdfjkldsjf\n\r\n skjdhfjkdshf ";
+    #[test]
+    fn it_should_deserialize_bulk_string_remaining_command_2_with_special_chars() {
+        let mut command = "$18\r\nping \r\nhello world\r\n$7\r\n1234567\r\n:4\r\n";
 
-    //     let result = deserialize_bulk_string(&format!("${}\r\n{}\r\n", test_str.len(), test_str));
-    //     assert_eq!(result, Some(test_str.to_string()));
-    // }
+        let result = deserialize_bulk_string(&mut command);
+        assert_eq!(result, Some("ping \r\nhello world".to_string()));
+        assert_eq!(command, "$7\r\n1234567\r\n:4\r\n");
+    }
 
-    // #[test]
-    // fn it_should_deserialize_bulk_string_null_elements() {
-    //     let result = deserialize_bulk_string("$-1\r\n");
-    //     assert_eq!(result, None);
-    // }
+    #[test]
+    fn it_should_deserialize_bulk_string_null_elements() {
+        let mut command = "$-1\r\n";
+        let result = deserialize_bulk_string(&mut command);
+        assert_eq!(result, None);
+        assert_eq!(command, "");
+    }
 
-    // #[test]
-    // fn it_should_deserialize_array() {
-    //     deserialize_array(
-    //         "*4\r\n+echo\r\n:11\r\n$4\r\n1234\r\n*2\r\n$4\r\n1234\r\n:11\r\n$4\r\nlast\r\n",
-    //     );
-    // }
+    #[test]
+    #[ignore]
+    fn it_should_deserialize_array_nested_arr() {
+        let mut command =
+            "*4\r\n+echo\r\n:11\r\n$4\r\n1234\r\n*2\r\n$4\r\n1234\r\n:11\r\n$4\r\nlast\r\n";
+        let result = deserialize_array(&mut command);
+        assert_eq!(
+            result,
+            Some(Vec::from([
+                Types::String("echo".to_string()),
+                Types::Number(11),
+                Types::String("1234".to_string()),
+                Types::Array(Box::new(vec![
+                    Types::String("1234".to_string()),
+                    Types::Number(11)
+                ])),
+                Types::String("last".to_string())
+            ]))
+        );
+        assert_eq!(command, "");
+    }
+    #[test]
+    #[ignore]
+    fn it_should_deserialize_array() {
+        let mut command = "*4\r\n+echo\r\n:11\r\n$4\r\n1234\r\n";
+        let result = deserialize_array(&mut command);
+        assert_eq!(
+            result,
+            Some(vec![
+                Types::String("echo".to_string()),
+                Types::Number(11),
+                Types::String("1234".to_string()),
+            ])
+        );
+        assert_eq!(command, "");
+    }
+
+    #[test]
+    #[ignore]
+    fn it_should_deserialize_array_0_elements() {
+        let mut command = "*0\r\n";
+        let result = deserialize_array(&mut command);
+        assert_eq!(result, Some(Vec::new()));
+        assert_eq!(command, "");
+    }
+
+    #[test]
+    #[ignore]
+    fn it_should_deserialize_array_null() {
+        let mut command = "*-1\r\n";
+        let result = deserialize_array(&mut command);
+        assert_eq!(result, None);
+        assert_eq!(command, "");
+    }
 }
