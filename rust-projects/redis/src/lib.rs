@@ -71,7 +71,7 @@ pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
             let mut ret: Vec<Types> = Vec::new();
 
             *command = &command[start..];
-            for _ in 0..count + 1 {
+            for _ in 0..count {
                 if let Some(first_char) = command.chars().next() {
                     match first_char {
                         '$' => {
@@ -210,10 +210,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_deserialize_array_nested_arr() {
         let mut command =
-            "*4\r\n+echo\r\n:11\r\n$4\r\n1234\r\n*2\r\n$4\r\n1234\r\n:11\r\n$4\r\nlast\r\n";
+            "*5\r\n+echo\r\n:11\r\n$4\r\n1234\r\n*2\r\n$4\r\n1234\r\n:11\r\n$4\r\nlast\r\n";
         let result = deserialize_array(&mut command);
         assert_eq!(
             result,
@@ -231,7 +230,6 @@ mod tests {
         assert_eq!(command, "");
     }
     #[test]
-    #[ignore]
     fn it_should_deserialize_array() {
         let mut command = "*4\r\n+echo\r\n:11\r\n$4\r\n1234\r\n";
         let result = deserialize_array(&mut command);
@@ -247,7 +245,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_deserialize_array_0_elements() {
         let mut command = "*0\r\n";
         let result = deserialize_array(&mut command);
@@ -256,7 +253,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_deserialize_array_null() {
         let mut command = "*-1\r\n";
         let result = deserialize_array(&mut command);
