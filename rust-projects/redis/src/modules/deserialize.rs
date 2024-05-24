@@ -124,21 +124,8 @@ pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
 
             *command = &command[start..];
             for _ in 0..count {
-                if let Some(first_char) = command.chars().next() {
-                    match first_char {
-                        '$' => {
-                            if let Some(result) = deserialize_bulk_string(command) {
-                                ret.push(Types::String(result))
-                            }
-                        }
-                        '*' => {
-                            if let Some(result) = deserialize_array(command) {
-                                ret.push(Types::Array(Box::new(result)))
-                            }
-                        }
-                        '+' | ':' | '-' => ret.push(deserialize_flat_command(command)),
-                        _ => panic!("Invalid command"),
-                    }
+                if let Some(result) = deserialize(command) {
+                    ret.extend(result);
                 }
             }
 
@@ -146,6 +133,55 @@ pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
         } else {
             *command = &command[start..];
         }
+    }
+
+    None
+}
+
+/// Deserialize a command from the given string slice.
+///
+/// The command can be of various types, indicated by the first character:
+/// - `$`: Bulk string
+/// - `*`: Array
+/// - `+`, `:`, `-`: Flat command (simple string, integer, or error)
+///
+/// # Arguments
+///
+/// * `command` - A mutable reference to a string slice containing the command.
+///
+/// # Returns
+///
+/// An `Option<Vec<Types>>` containing the deserialized command if successful, or `None` if the command is invalid.
+///
+/// # Example
+///
+/// ```
+/// use redis::modules::deserialize::{deserialize, Types};
+///
+/// let mut command = "+OK\r\n";
+/// let result = deserialize(&mut command);
+/// assert_eq!(result, Some(vec![Types::String("OK".to_string())]));
+/// assert_eq!(command, "");
+/// ```
+pub fn deserialize(command: &mut &str) -> Option<Vec<Types>> {
+    let mut ret: Vec<Types> = Vec::new();
+    if let Some(first_char) = command.chars().next() {
+        match first_char {
+            '$' => {
+                if let Some(result) = deserialize_bulk_string(command) {
+                    ret.push(Types::String(result))
+                }
+            }
+            '*' => {
+                if let Some(result) = deserialize_array(command) {
+                    ret.push(Types::Array(Box::new(result)))
+                }
+            }
+            '+' | ':' | '-' => ret.push(deserialize_flat_command(command)),
+            _ => panic!("Invalid command"),
+        };
+
+        return Some(ret);
     }
 
     None
