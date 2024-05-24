@@ -52,16 +52,18 @@ pub fn deserialize_bulk_string(command: &mut &str) -> Option<String> {
             let string: String = command[start..].chars().take(count).collect();
             let len = string.len() + 2;
 
-            *command = &command[start + len..];
+            if command.len() >= (start + len) {
+                *command = &command[start + len..];
 
-            return Some(string);
+                return Some(string);
+            }
         } else {
             *command = &command[start..];
             return None;
         }
     }
 
-    None
+    panic!("Invalid Command")
 }
 
 pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
@@ -111,6 +113,7 @@ mod tests {
         assert_eq!(result, Types::String("OK".to_string()));
         assert_eq!(command, "");
     }
+
     #[test]
     fn it_should_de_serialize_error_message() {
         let mut command = "-Error message\r\n";
@@ -119,6 +122,7 @@ mod tests {
         assert_eq!(result, Types::String("Error message".to_string()));
         assert_eq!(command, "");
     }
+
     #[test]
     fn it_should_de_serialize_number_positive() {
         let mut command = ":+1000\r\n";
@@ -210,6 +214,23 @@ mod tests {
     }
 
     #[test]
+    fn it_should_deserialize_bulk_string_empty() {
+        let mut command = "$0\r\n\r\n";
+        let result = deserialize_bulk_string(&mut command);
+        assert_eq!(result, Some("".to_string()));
+        assert_eq!(command, "");
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid Command")]
+    fn it_should_deserialize_bulk_string_incomplete() {
+        let mut command = "$4\r\npin";
+        let result = deserialize_bulk_string(&mut command);
+        assert_eq!(result, None);
+        assert_eq!(command, "");
+    }
+
+    #[test]
     fn it_should_deserialize_array_nested_arr() {
         let mut command =
             "*5\r\n+echo\r\n:11\r\n$4\r\n1234\r\n*2\r\n$4\r\n1234\r\n:11\r\n$4\r\nlast\r\n";
@@ -229,6 +250,7 @@ mod tests {
         );
         assert_eq!(command, "");
     }
+
     #[test]
     fn it_should_deserialize_array() {
         let mut command = "*4\r\n+echo\r\n:11\r\n$4\r\n1234\r\n";
@@ -257,6 +279,29 @@ mod tests {
         let mut command = "*-1\r\n";
         let result = deserialize_array(&mut command);
         assert_eq!(result, None);
+        assert_eq!(command, "");
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid Command")]
+    fn it_should_deserialize_array_incomplete() {
+        let mut command = "*2\r\n+echo\r\n:11";
+        let result = deserialize_array(&mut command);
+        assert_eq!(result, None);
+        assert_eq!(command, "");
+    }
+
+    #[test]
+    fn it_should_deserialize_array_with_empty_bulk_string() {
+        let mut command = "*2\r\n$0\r\n\r\n+OK\r\n";
+        let result = deserialize_array(&mut command);
+        assert_eq!(
+            result,
+            Some(vec![
+                Types::String("".to_string()),
+                Types::String("OK".to_string())
+            ])
+        );
         assert_eq!(command, "");
     }
 }
