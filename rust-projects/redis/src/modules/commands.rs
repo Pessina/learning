@@ -16,7 +16,7 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         }
                     }
                 }
-                "set" => {
+                "SET" => {
                     if a.len() == 3 {
                         if let [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value)] =
                             a[..]
@@ -29,13 +29,23 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         }
                     }
                 }
-                "get" => {
+                "GET" => {
                     if a.len() == 2 {
                         if let [_, RedisDeserializationTypes::BulkString(ref key)] = a[..] {
                             match redis.lock().unwrap().get(key) {
                                 Some(result) => return format!("+{}\r\n", result),
                                 None => return format!("+NONE\r\n"),
                             }
+                        }
+                    }
+                }
+                "CONFIG" => {
+                    if let RedisDeserializationTypes::BulkString(ref s) = a[2] {
+                        if s == "save" {
+                            return "*2\r\n$4\r\nsave\r\n$23\r\n3600 1 300 100 60 10000\r\n"
+                                .to_string();
+                        } else if s == "appendonly" {
+                            return "*2\r\n$10\r\nappendonly\r\n$2\r\nno\r\n".to_string();
                         }
                     }
                 }
