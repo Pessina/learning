@@ -8,8 +8,10 @@ pub fn execute_command(command: &RedisDeserializationTypes) -> String {
             RedisDeserializationTypes::BulkString(ref s) => match s.as_ref() {
                 "PING" => return "+PONG\r\n".to_string(),
                 "ECHO" => {
-                    if let RedisDeserializationTypes::BulkString(ref echo) = a[1] {
-                        return format!("+{}\r\n", echo);
+                    if a.len() == 2 {
+                        if let RedisDeserializationTypes::BulkString(ref echo) = a[1] {
+                            return format!("+{}\r\n", echo);
+                        }
                     }
                 }
                 _ => {}
@@ -41,5 +43,22 @@ mod tests {
             RedisDeserializationTypes::BulkString("Hello World".to_string()),
         ])));
         assert_eq!(response, "+Hello World\r\n")
+    }
+
+    #[test]
+    fn it_should_error_echo() {
+        let response = execute_command(&RedisDeserializationTypes::Array(Box::new(vec![
+            RedisDeserializationTypes::BulkString("ECHO".to_string()),
+        ])));
+        assert_eq!(response, "-Invalid Command\r\n")
+    }
+
+    #[test]
+    fn it_should_error() {
+        let response = execute_command(&RedisDeserializationTypes::Array(Box::new(vec![
+            RedisDeserializationTypes::BulkString("123".to_string()),
+            RedisDeserializationTypes::BulkString("Hello World".to_string()),
+        ])));
+        assert_eq!(response, "-Invalid Command\r\n")
     }
 }
