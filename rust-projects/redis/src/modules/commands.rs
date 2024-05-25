@@ -1,8 +1,10 @@
-use super::types::RedisDeserializationTypes;
+use std::sync::{Arc, Mutex};
+
+use super::{store::Redis, types::RedisDeserializationTypes};
 
 const INVALID_COMMAND: &'static str = "-Invalid Command\r\n";
 
-pub fn execute_command(command: &RedisDeserializationTypes) -> String {
+pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Redis>>) -> String {
     match command {
         RedisDeserializationTypes::Array(ref a) => match a[0] {
             RedisDeserializationTypes::BulkString(ref s) => match s.as_ref() {
@@ -13,6 +15,11 @@ pub fn execute_command(command: &RedisDeserializationTypes) -> String {
                             return format!("+{}\r\n", echo);
                         }
                     }
+                }
+                "set" => {
+                    let a = redis;
+                    let mut a = a.lock().unwrap();
+                    a.set("Name".to_string(), "Felipe".to_string());
                 }
                 _ => {}
             },
