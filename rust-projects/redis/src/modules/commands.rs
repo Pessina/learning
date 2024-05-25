@@ -21,3 +21,25 @@ pub fn execute_command(command: &RedisDeserializationTypes) -> String {
 
     INVALID_COMMAND.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_should_ping_pong() {
+        let response = execute_command(&RedisDeserializationTypes::Array(Box::new(vec![
+            RedisDeserializationTypes::BulkString("PING".to_string()),
+        ])));
+        assert_eq!(response, "+PONG\r\n")
+    }
+
+    #[test]
+    fn it_should_echo() {
+        let response = execute_command(&RedisDeserializationTypes::Array(Box::new(vec![
+            RedisDeserializationTypes::BulkString("ECHO".to_string()),
+            RedisDeserializationTypes::BulkString("Hello World".to_string()),
+        ])));
+        assert_eq!(response, "+Hello World\r\n")
+    }
+}

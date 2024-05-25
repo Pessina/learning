@@ -14,9 +14,9 @@ pub fn handle_connection(mut stream: TcpStream) {
             let command = String::from_utf8(Vec::from(&buffer[..size])).unwrap();
             let command = deserialize(&mut command.as_ref()).unwrap();
 
-            let response = execute_command(&command);
+            println!("Command {:?}", command);
 
-            println!("Response {response}");
+            let response = execute_command(&command);
 
             stream.write_all(response.as_bytes()).unwrap();
             stream.flush().unwrap();
