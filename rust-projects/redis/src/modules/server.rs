@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use super::deserialize::deserialize;
+use super::{commands::execute_command, deserialize::deserialize};
 
 pub fn handle_connection(mut stream: TcpStream) {
     thread::spawn(move || {
@@ -12,12 +12,12 @@ pub fn handle_connection(mut stream: TcpStream) {
 
         if let Ok(size) = stream.read(&mut buffer) {
             let command = String::from_utf8(Vec::from(&buffer[..size])).unwrap();
-            let mut command = command.as_ref();
-            let command = deserialize(&mut command).unwrap();
+            let command = deserialize(&mut command.as_ref()).unwrap();
 
-            println!("{:?}", command);
+            let response = execute_command(&command);
 
-            let response = "+PONG\r\n".to_string();
+            println!("Response {response}");
+
             stream.write_all(response.as_bytes()).unwrap();
             stream.flush().unwrap();
         }

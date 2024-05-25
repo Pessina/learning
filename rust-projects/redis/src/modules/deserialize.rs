@@ -126,7 +126,7 @@ pub fn deserialize_array(command: &mut &str) -> Option<Vec<RedisDeserializationT
             *command = &command[start..];
             for _ in 0..count {
                 if let Some(result) = deserialize(command) {
-                    ret.extend(result);
+                    ret.push(result);
                 }
             }
 
@@ -162,28 +162,25 @@ pub fn deserialize_array(command: &mut &str) -> Option<Vec<RedisDeserializationT
 ///
 /// let mut command = "+OK\r\n";
 /// let result = deserialize(&mut command);
-/// assert_eq!(result, Some(vec![RedisDeserializationTypes::SimpleString("OK".to_string())]));
+/// assert_eq!(result, Some(RedisDeserializationTypes::SimpleString("OK".to_string())));
 /// assert_eq!(command, "");
 /// ```
-pub fn deserialize(command: &mut &str) -> Option<Vec<RedisDeserializationTypes>> {
-    let mut ret: Vec<RedisDeserializationTypes> = Vec::new();
+pub fn deserialize(command: &mut &str) -> Option<RedisDeserializationTypes> {
     if let Some(first_char) = command.chars().next() {
         match first_char {
             '$' => {
                 if let Some(result) = deserialize_bulk_string(command) {
-                    ret.push(result)
+                    return Some(result);
                 }
             }
             '*' => {
                 if let Some(result) = deserialize_array(command) {
-                    ret.push(RedisDeserializationTypes::Array(Box::new(result)))
+                    return Some(RedisDeserializationTypes::Array(Box::new(result)));
                 }
             }
-            '+' | ':' | '-' => ret.push(deserialize_flat_command(command)),
+            '+' | ':' | '-' => return Some(deserialize_flat_command(command)),
             _ => panic!("Invalid command"),
         };
-
-        return Some(ret);
     }
 
     None
