@@ -28,8 +28,8 @@ pub mod tests {
     fn it_should_succeed_get() {
         let mut redis = Redis::new();
         redis.set("Name".to_string(), "Felipe".to_string());
-        let name = redis.get("Name").unwrap();
-        assert_eq!(name.to_owned(), "Felipe".to_string());
+        let name = redis.get("Name").unwrap().to_owned();
+        assert_eq!(name, "Felipe".to_string());
     }
 
     #[test]
@@ -47,7 +47,7 @@ pub mod tests {
         let mut redis = Redis::new();
         redis.set("Name".to_string(), "Felipe".to_string());
         redis.set("Name".to_string(), "Carlos".to_string());
-        let name = redis.get("Name").unwrap();
-        assert_eq!(name.to_owned(), "Carlos".to_string());
+        let name = redis.get("Name").unwrap().to_owned();
+        assert_eq!(name, "Carlos".to_string());
     }
 }
