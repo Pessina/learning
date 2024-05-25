@@ -11,12 +11,11 @@ pub fn handle_connection(mut stream: TcpStream) {
         let mut buffer = [0; 1024];
 
         if let Ok(size) = stream.read(&mut buffer) {
-            let command = String::from_utf8_lossy(&buffer[..size]);
+            let command = String::from_utf8(Vec::from(&buffer[..size])).unwrap();
             let mut command = command.as_ref();
+            let command = deserialize(&mut command).unwrap();
 
-            let result = deserialize(&mut command).unwrap();
-
-            println!("{:?}", result);
+            println!("{:?}", command);
 
             let response = "+PONG\r\n".to_string();
             stream.write_all(response.as_bytes()).unwrap();

@@ -1,9 +1,4 @@
-#[derive(Debug, PartialEq)]
-pub enum Types {
-    String(String),
-    Number(i64),
-    Array(Box<Vec<Types>>),
-}
+use super::types::RedisDeserializationTypes;
 
 /// Deserialize a flat command from the given string slice.
 ///
@@ -20,14 +15,15 @@ pub enum Types {
 /// # Example
 ///
 /// ```
-/// use redis::modules::deserialize::{deserialize_flat_command, Types};
+/// use redis::modules::deserialize::deserialize_flat_command;
+/// use redis::modules::types::RedisDeserializationTypes;
 ///
 /// let mut command = "+OK\r\n";
 /// let result = deserialize_flat_command(&mut command);
-/// assert_eq!(result, Types::String("OK".to_string()));
+/// assert_eq!(result, RedisDeserializationTypes::SimpleString("OK".to_string()));
 /// assert_eq!(command, "");
 /// ```
-pub fn deserialize_flat_command(command: &mut &str) -> Types {
+pub fn deserialize_flat_command(command: &mut &str) -> RedisDeserializationTypes {
     if let Some(pos) = command.find("\r\n") {
         let simple_str = &command[..pos];
         let first_char = simple_str.chars().next().expect("Invalid Command");
@@ -35,8 +31,11 @@ pub fn deserialize_flat_command(command: &mut &str) -> Types {
         *command = &command[pos + 2..];
 
         match first_char {
-            '+' | '-' => Types::String(simple_str[1..].to_string()),
-            ':' => Types::Number(simple_str[1..].parse::<i64>().expect("To be a number")),
+            '+' => RedisDeserializationTypes::SimpleString(simple_str[1..].to_string()),
+            '-' => RedisDeserializationTypes::ErrorMessage(simple_str[1..].to_string()),
+            ':' => RedisDeserializationTypes::Integer(
+                simple_str[1..].parse::<i64>().expect("To be a number"),
+            ),
             _ => panic!("Invalid Command"),
         }
     } else {
@@ -60,13 +59,14 @@ pub fn deserialize_flat_command(command: &mut &str) -> Types {
 ///
 /// ```
 /// use redis::modules::deserialize::deserialize_bulk_string;
+/// use redis::modules::types::RedisDeserializationTypes;
 ///
 /// let mut command = "$6\r\nfoobar\r\n";
 /// let result = deserialize_bulk_string(&mut command);
-/// assert_eq!(result, Some("foobar".to_string()));
+/// assert_eq!(result, Some(RedisDeserializationTypes::BulkString("foobar".to_string())));
 /// assert_eq!(command, "");
 /// ```
-pub fn deserialize_bulk_string(command: &mut &str) -> Option<String> {
+pub fn deserialize_bulk_string(command: &mut &str) -> Option<RedisDeserializationTypes> {
     if let Some(pos) = command.find("\r\n") {
         let start = pos + 2;
 
@@ -77,7 +77,7 @@ pub fn deserialize_bulk_string(command: &mut &str) -> Option<String> {
             if command.len() >= (start + len) {
                 *command = &command[start + len..];
 
-                return Some(string);
+                return Some(RedisDeserializationTypes::BulkString(string));
             }
         } else {
             *command = &command[start..];
@@ -103,24 +103,25 @@ pub fn deserialize_bulk_string(command: &mut &str) -> Option<String> {
 /// # Example
 ///
 /// ```
-/// use redis::modules::deserialize::{deserialize_array, Types};
+/// use redis::modules::deserialize::deserialize_array;
+/// use redis::modules::types::RedisDeserializationTypes;
 ///
 /// let mut command = "*2\r\n+OK\r\n:1000\r\n";
 /// let result = deserialize_array(&mut command);
 /// assert_eq!(
 ///     result,
 ///     Some(vec![
-///         Types::String("OK".to_string()),
-///         Types::Number(1000)
+///         RedisDeserializationTypes::SimpleString("OK".to_string()),
+///         RedisDeserializationTypes::Integer(1000)
 ///     ])
 /// );
 /// assert_eq!(command, "");
 /// ```
-pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
+pub fn deserialize_array(command: &mut &str) -> Option<Vec<RedisDeserializationTypes>> {
     if let Some(pos) = command.find("\r\n") {
         let start = pos + 2;
         if let Ok(count) = command[1..pos].parse::<u32>() {
-            let mut ret: Vec<Types> = Vec::new();
+            let mut ret: Vec<RedisDeserializationTypes> = Vec::new();
 
             *command = &command[start..];
             for _ in 0..count {
@@ -156,25 +157,26 @@ pub fn deserialize_array(command: &mut &str) -> Option<Vec<Types>> {
 /// # Example
 ///
 /// ```
-/// use redis::modules::deserialize::{deserialize, Types};
+/// use redis::modules::deserialize::deserialize;
+/// use redis::modules::types::RedisDeserializationTypes;
 ///
 /// let mut command = "+OK\r\n";
 /// let result = deserialize(&mut command);
-/// assert_eq!(result, Some(vec![Types::String("OK".to_string())]));
+/// assert_eq!(result, Some(vec![RedisDeserializationTypes::SimpleString("OK".to_string())]));
 /// assert_eq!(command, "");
 /// ```
-pub fn deserialize(command: &mut &str) -> Option<Vec<Types>> {
-    let mut ret: Vec<Types> = Vec::new();
+pub fn deserialize(command: &mut &str) -> Option<Vec<RedisDeserializationTypes>> {
+    let mut ret: Vec<RedisDeserializationTypes> = Vec::new();
     if let Some(first_char) = command.chars().next() {
         match first_char {
             '$' => {
                 if let Some(result) = deserialize_bulk_string(command) {
-                    ret.push(Types::String(result))
+                    ret.push(result)
                 }
             }
             '*' => {
                 if let Some(result) = deserialize_array(command) {
-                    ret.push(Types::Array(Box::new(result)))
+                    ret.push(RedisDeserializationTypes::Array(Box::new(result)))
                 }
             }
             '+' | ':' | '-' => ret.push(deserialize_flat_command(command)),
@@ -195,7 +197,10 @@ mod tests {
         let mut command = "+OK\r\n";
 
         let result = deserialize_flat_command(&mut command);
-        assert_eq!(result, Types::String("OK".to_string()));
+        assert_eq!(
+            result,
+            RedisDeserializationTypes::SimpleString("OK".to_string())
+        );
         assert_eq!(command, "");
     }
 
@@ -204,7 +209,10 @@ mod tests {
         let mut command = "-Error message\r\n";
 
         let result = deserialize_flat_command(&mut command);
-        assert_eq!(result, Types::String("Error message".to_string()));
+        assert_eq!(
+            result,
+            RedisDeserializationTypes::ErrorMessage("Error message".to_string())
+        );
         assert_eq!(command, "");
     }
 
@@ -213,7 +221,7 @@ mod tests {
         let mut command = ":+1000\r\n";
 
         let result = deserialize_flat_command(&mut command);
-        assert_eq!(result, Types::Number(1000));
+        assert_eq!(result, RedisDeserializationTypes::Integer(1000));
         assert_eq!(command, "");
     }
 
@@ -222,7 +230,7 @@ mod tests {
         let mut command = ":-1000\r\n";
 
         let result = deserialize_flat_command(&mut command);
-        assert_eq!(result, Types::Number(-1000));
+        assert_eq!(result, RedisDeserializationTypes::Integer(-1000));
         assert_eq!(command, "");
     }
 
@@ -231,7 +239,7 @@ mod tests {
         let mut command = ":0\r\n";
 
         let result = deserialize_flat_command(&mut command);
-        assert_eq!(result, Types::Number(0));
+        assert_eq!(result, RedisDeserializationTypes::Integer(0));
         assert_eq!(command, "");
     }
 
@@ -241,7 +249,7 @@ mod tests {
         let mut command = "";
 
         let result = deserialize_flat_command(&mut command);
-        assert_eq!(result, Types::Number(0));
+        assert_eq!(result, RedisDeserializationTypes::Integer(0));
         assert_eq!(command, "");
     }
 
@@ -250,7 +258,7 @@ mod tests {
         let mut command = ":0\r\n$4\r\necho\r\n";
 
         let result = deserialize_flat_command(&mut command);
-        assert_eq!(result, Types::Number(0));
+        assert_eq!(result, RedisDeserializationTypes::Integer(0));
         assert_eq!(command, "$4\r\necho\r\n");
     }
 
@@ -259,7 +267,10 @@ mod tests {
         let mut command = "+hello\r\n$4\r\necho\r\n+echo\r\n-Error Message\r\n";
 
         let result = deserialize_flat_command(&mut command);
-        assert_eq!(result, Types::String("hello".to_string()));
+        assert_eq!(
+            result,
+            RedisDeserializationTypes::SimpleString("hello".to_string())
+        );
         assert_eq!(command, "$4\r\necho\r\n+echo\r\n-Error Message\r\n");
     }
 
@@ -268,7 +279,10 @@ mod tests {
         let mut command = "$4\r\nping\r\n";
 
         let result = deserialize_bulk_string(&mut command);
-        assert_eq!(result, Some("ping".to_string()));
+        assert_eq!(
+            result,
+            Some(RedisDeserializationTypes::BulkString("ping".to_string()))
+        );
         assert_eq!(command, "");
     }
 
@@ -277,7 +291,10 @@ mod tests {
         let mut command = "$4\r\nping\r\n:123\r\n";
 
         let result = deserialize_bulk_string(&mut command);
-        assert_eq!(result, Some("ping".to_string()));
+        assert_eq!(
+            result,
+            Some(RedisDeserializationTypes::BulkString("ping".to_string()))
+        );
         assert_eq!(command, ":123\r\n");
     }
 
@@ -286,7 +303,12 @@ mod tests {
         let mut command = "$18\r\nping \r\nhello world\r\n$7\r\n1234567\r\n:4\r\n";
 
         let result = deserialize_bulk_string(&mut command);
-        assert_eq!(result, Some("ping \r\nhello world".to_string()));
+        assert_eq!(
+            result,
+            Some(RedisDeserializationTypes::BulkString(
+                "ping \r\nhello world".to_string()
+            ))
+        );
         assert_eq!(command, "$7\r\n1234567\r\n:4\r\n");
     }
 
@@ -302,7 +324,10 @@ mod tests {
     fn it_should_deserialize_bulk_string_empty() {
         let mut command = "$0\r\n\r\n";
         let result = deserialize_bulk_string(&mut command);
-        assert_eq!(result, Some("".to_string()));
+        assert_eq!(
+            result,
+            Some(RedisDeserializationTypes::BulkString("".to_string()))
+        );
         assert_eq!(command, "");
     }
 
@@ -323,14 +348,14 @@ mod tests {
         assert_eq!(
             result,
             Some(Vec::from([
-                Types::String("echo".to_string()),
-                Types::Number(11),
-                Types::String("1234".to_string()),
-                Types::Array(Box::new(vec![
-                    Types::String("1234".to_string()),
-                    Types::Number(11)
+                RedisDeserializationTypes::SimpleString("echo".to_string()),
+                RedisDeserializationTypes::Integer(11),
+                RedisDeserializationTypes::BulkString("1234".to_string()),
+                RedisDeserializationTypes::Array(Box::new(vec![
+                    RedisDeserializationTypes::BulkString("1234".to_string()),
+                    RedisDeserializationTypes::Integer(11)
                 ])),
-                Types::String("last".to_string())
+                RedisDeserializationTypes::BulkString("last".to_string())
             ]))
         );
         assert_eq!(command, "");
@@ -343,9 +368,9 @@ mod tests {
         assert_eq!(
             result,
             Some(vec![
-                Types::String("echo".to_string()),
-                Types::Number(11),
-                Types::String("1234".to_string()),
+                RedisDeserializationTypes::SimpleString("echo".to_string()),
+                RedisDeserializationTypes::Integer(11),
+                RedisDeserializationTypes::BulkString("1234".to_string()),
             ])
         );
         assert_eq!(command, "");
@@ -383,8 +408,8 @@ mod tests {
         assert_eq!(
             result,
             Some(vec![
-                Types::String("".to_string()),
-                Types::String("OK".to_string())
+                RedisDeserializationTypes::BulkString("".to_string()),
+                RedisDeserializationTypes::SimpleString("OK".to_string())
             ])
         );
         assert_eq!(command, "");
