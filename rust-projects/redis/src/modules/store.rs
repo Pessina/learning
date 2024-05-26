@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chrono::prelude::*;
 
+#[derive(Debug)]
 pub struct RedisCell {
     pub value: String,
     pub expiry: Option<DateTime<Utc>>,
@@ -23,16 +24,19 @@ impl Redis {
     }
 
     pub fn get(&self, key: &str) -> Option<&RedisCell> {
-        self.map.get(key)
+        self.map
+            .get(key)
+            .filter(|result| result.expiry.map_or(true, |expiry| expiry > Utc::now()))
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use chrono::Duration;
+
     use super::*;
 
     #[test]
-    #[ignore]
     fn it_should_succeed_get() {
         let mut redis = Redis::new();
 
@@ -48,7 +52,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_fail_get() {
         let mut redis = Redis::new();
 
@@ -67,7 +70,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_overwrite_insert() {
         let mut redis = Redis::new();
 
@@ -87,6 +89,44 @@ pub mod tests {
 
         if let Some(result) = redis.get(key) {
             assert_eq!(result.value, "Carlos".to_string());
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn it_should_be_expired() {
+        let mut redis = Redis::new();
+
+        let key = "Name";
+        let value = RedisCell {
+            value: String::from("Carlos"),
+            expiry: Some(Utc::now()),
+        };
+
+        redis.set(key.to_string(), value);
+
+        match redis.get(key) {
+            Some(_) => assert!(false),
+            None => assert!(true),
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn it_should_not_be_expired() {
+        let mut redis = Redis::new();
+
+        let key = "Name";
+        let value = RedisCell {
+            value: String::from("Carlos"),
+            expiry: Some(Utc::now() + Duration::hours(1)),
+        };
+
+        redis.set(key.to_string(), value);
+
+        match redis.get(key) {
+            Some(_) => assert!(true),
+            None => assert!(false),
         }
     }
 }
