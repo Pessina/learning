@@ -11,6 +11,7 @@ pub fn handle_connection(mut stream: TcpStream, redis: Arc<Mutex<Redis>>) {
     thread::spawn(move || {
         let mut buffer = [0; 1024];
 
+        // Keep the connection alive
         loop {
             match stream.read(&mut buffer) {
                 // Close connection

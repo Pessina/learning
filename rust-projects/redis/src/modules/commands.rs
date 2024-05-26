@@ -1,6 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use super::{store::Redis, types::RedisDeserializationTypes};
+use chrono::{Duration, TimeZone, Utc};
+
+use super::{
+    store::{Redis, RedisCell},
+    types::RedisDeserializationTypes,
+};
 
 const INVALID_COMMAND: &'static str = "-Invalid Command\r\n";
 
@@ -21,10 +26,37 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         if let [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value)] =
                             a[..]
                         {
-                            redis
-                                .lock()
-                                .unwrap()
-                                .set(key.to_string(), value.to_string());
+                            redis.lock().unwrap().set(
+                                key.to_string(),
+                                RedisCell {
+                                    value: value.to_string(),
+                                    expiry: None,
+                                },
+                            );
+                            return "+OK\r\n".to_string();
+                        }
+                    }
+                    if a.len() == 5 {
+                        if let [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value), RedisDeserializationTypes::BulkString(ref expiry_config), RedisDeserializationTypes::Integer(ref expiry_value)] =
+                            a[..]
+                        {
+                            let expiry = match expiry_config.as_ref() {
+                                "EX" => Utc::now() + Duration::seconds(*expiry_value),
+                                "PX" => Utc::now() + Duration::milliseconds(*expiry_value),
+                                "EAXT" => Utc.timestamp_opt(*expiry_value as i64, 0).unwrap(),
+                                "PXAT" => {
+                                    Utc.timestamp_opt((*expiry_value as i64) / 1000, 0).unwrap()
+                                }
+                                _ => panic!("Invalid Command"),
+                            };
+
+                            redis.lock().unwrap().set(
+                                key.to_string(),
+                                RedisCell {
+                                    value: value.to_string(),
+                                    expiry: Some(expiry),
+                                },
+                            );
                             return "+OK\r\n".to_string();
                         }
                     }
@@ -33,7 +65,7 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                     if a.len() == 2 {
                         if let [_, RedisDeserializationTypes::BulkString(ref key)] = a[..] {
                             match redis.lock().unwrap().get(key) {
-                                Some(result) => return format!("+{}\r\n", result),
+                                Some(result) => return format!("+{}\r\n", result.value),
                                 None => return format!("+NONE\r\n"),
                             }
                         }
