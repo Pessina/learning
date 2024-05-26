@@ -37,17 +37,27 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         }
                     }
                     if a.len() == 5 {
-                        if let [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value), RedisDeserializationTypes::BulkString(ref expiry_config), RedisDeserializationTypes::Integer(ref expiry_value)] =
+                        if let [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value), RedisDeserializationTypes::BulkString(ref expiry_config), RedisDeserializationTypes::BulkString(ref expiry_value)] =
                             a[..]
                         {
                             let expiry = match expiry_config.as_ref() {
-                                "EX" => Utc::now() + Duration::seconds(*expiry_value),
-                                "PX" => Utc::now() + Duration::milliseconds(*expiry_value),
-                                "EAXT" => Utc.timestamp_opt(*expiry_value as i64, 0).unwrap(),
-                                "PXAT" => {
-                                    Utc.timestamp_opt((*expiry_value as i64) / 1000, 0).unwrap()
+                                "EX" => {
+                                    Utc::now()
+                                        + Duration::seconds(expiry_value.parse::<i64>().unwrap())
                                 }
-                                _ => panic!("Invalid Command"),
+                                "PX" => {
+                                    Utc::now()
+                                        + Duration::milliseconds(
+                                            expiry_value.parse::<i64>().unwrap(),
+                                        )
+                                }
+                                "EAXT" => Utc
+                                    .timestamp_opt(expiry_value.parse::<i64>().unwrap(), 0)
+                                    .unwrap(),
+                                "PXAT" => Utc
+                                    .timestamp_opt((expiry_value.parse::<i64>().unwrap()) / 1000, 0)
+                                    .unwrap(),
+                                _ => return INVALID_COMMAND.to_string(),
                             };
 
                             redis.lock().unwrap().set(
@@ -57,6 +67,7 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                                     expiry: Some(expiry),
                                 },
                             );
+
                             return "+OK\r\n".to_string();
                         }
                     }
@@ -88,6 +99,13 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
 
 #[cfg(test)]
 mod tests {
+
+    use std::{
+        thread::{self},
+        time::Duration,
+    };
+
+    use chrono::{Duration as ChronoDuration, Utc};
 
     use super::*;
 
@@ -156,7 +174,7 @@ mod tests {
         let Setup { redis } = setup();
         let response = execute_command(
             &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("set".to_string()),
+                RedisDeserializationTypes::BulkString("SET".to_string()),
                 RedisDeserializationTypes::BulkString("Name".to_string()),
                 RedisDeserializationTypes::BulkString("Felipe".to_string()),
             ])),
@@ -165,7 +183,7 @@ mod tests {
         assert_eq!(response, "+OK\r\n");
         let response = execute_command(
             &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("get".to_string()),
+                RedisDeserializationTypes::BulkString("GET".to_string()),
                 RedisDeserializationTypes::BulkString("Name".to_string()),
             ])),
             Arc::clone(&redis),
@@ -178,7 +196,7 @@ mod tests {
         let Setup { redis } = setup();
         let response = execute_command(
             &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("set".to_string()),
+                RedisDeserializationTypes::BulkString("SET".to_string()),
                 RedisDeserializationTypes::BulkString("Name".to_string()),
                 RedisDeserializationTypes::BulkString("Felipe".to_string()),
             ])),
@@ -187,7 +205,7 @@ mod tests {
         assert_eq!(response, "+OK\r\n");
         let response = execute_command(
             &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("set".to_string()),
+                RedisDeserializationTypes::BulkString("SET".to_string()),
                 RedisDeserializationTypes::BulkString("Name".to_string()),
                 RedisDeserializationTypes::BulkString("Carlos".to_string()),
             ])),
@@ -196,7 +214,7 @@ mod tests {
         assert_eq!(response, "+OK\r\n");
         let response = execute_command(
             &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("get".to_string()),
+                RedisDeserializationTypes::BulkString("GET".to_string()),
                 RedisDeserializationTypes::BulkString("Name".to_string()),
             ])),
             Arc::clone(&redis),
@@ -209,7 +227,7 @@ mod tests {
         let Setup { redis } = setup();
         let response = execute_command(
             &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("set".to_string()),
+                RedisDeserializationTypes::BulkString("SET".to_string()),
                 RedisDeserializationTypes::BulkString("Name".to_string()),
             ])),
             Arc::clone(&redis),
@@ -222,7 +240,7 @@ mod tests {
         let Setup { redis } = setup();
         let response = execute_command(
             &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("get".to_string()),
+                RedisDeserializationTypes::BulkString("GET".to_string()),
             ])),
             Arc::clone(&redis),
         );
@@ -234,11 +252,174 @@ mod tests {
         let Setup { redis } = setup();
         let response = execute_command(
             &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("get".to_string()),
+                RedisDeserializationTypes::BulkString("GET".to_string()),
                 RedisDeserializationTypes::BulkString("Age".to_string()),
             ])),
             Arc::clone(&redis),
         );
+        assert_eq!(response, "+NONE\r\n");
+    }
+
+    #[test]
+    #[ignore]
+    fn it_should_be_expired_seconds() {
+        let Setup { redis } = setup();
+
+        execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("SET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+                RedisDeserializationTypes::BulkString("Felipe".to_string()),
+                RedisDeserializationTypes::BulkString("EX".to_string()),
+                RedisDeserializationTypes::BulkString("1".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        let response = execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        assert_eq!(response, "+Felipe\r\n");
+
+        thread::sleep(Duration::from_secs(2));
+
+        let response = execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        assert_eq!(response, "+NONE\r\n");
+    }
+
+    #[test]
+    #[ignore]
+    fn it_should_be_expired_miliseconds() {
+        let Setup { redis } = setup();
+
+        execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("SET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+                RedisDeserializationTypes::BulkString("Felipe".to_string()),
+                RedisDeserializationTypes::BulkString("PX".to_string()),
+                RedisDeserializationTypes::BulkString("1000".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        let response = execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        assert_eq!(response, "+Felipe\r\n");
+
+        thread::sleep(Duration::from_millis(2000));
+
+        let response = execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        assert_eq!(response, "+NONE\r\n");
+    }
+
+    #[test]
+    #[ignore]
+    fn it_should_be_expired_utc_seconds() {
+        let Setup { redis } = setup();
+
+        execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("SET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+                RedisDeserializationTypes::BulkString("Felipe".to_string()),
+                RedisDeserializationTypes::BulkString("EAXT".to_string()),
+                RedisDeserializationTypes::BulkString(
+                    (Utc::now() + ChronoDuration::seconds(1))
+                        .timestamp()
+                        .to_string(),
+                ),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        let response = execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        assert_eq!(response, "+Felipe\r\n");
+
+        thread::sleep(Duration::from_secs(2));
+
+        let response = execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        assert_eq!(response, "+NONE\r\n");
+    }
+
+    #[test]
+    #[ignore]
+    fn it_should_be_expired_utc_miliseconds() {
+        let Setup { redis } = setup();
+
+        execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("SET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+                RedisDeserializationTypes::BulkString("Felipe".to_string()),
+                RedisDeserializationTypes::BulkString("PXAT".to_string()),
+                RedisDeserializationTypes::BulkString(
+                    ((Utc::now() + ChronoDuration::milliseconds(1000)).timestamp() * 1000)
+                        .to_string(),
+                ),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        let response = execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
+        assert_eq!(response, "+Felipe\r\n");
+
+        thread::sleep(Duration::from_millis(2000));
+
+        let response = execute_command(
+            &RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString("Name".to_string()),
+            ])),
+            Arc::clone(&redis),
+        );
+
         assert_eq!(response, "+NONE\r\n");
     }
 }

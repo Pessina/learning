@@ -23,10 +23,17 @@ impl Redis {
         self.map.insert(key, value)
     }
 
-    pub fn get(&self, key: &str) -> Option<&RedisCell> {
-        self.map
-            .get(key)
-            .filter(|result| result.expiry.map_or(true, |expiry| expiry > Utc::now()))
+    pub fn get(&mut self, key: &str) -> Option<&RedisCell> {
+        if let Some(expiry) = self.map.get(key).and_then(|cell| cell.expiry) {
+            if expiry > Utc::now() {
+                self.map.get(key)
+            } else {
+                self.map.remove(key);
+                None
+            }
+        } else {
+            self.map.get(key)
+        }
     }
 }
 
@@ -93,14 +100,13 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_be_expired() {
         let mut redis = Redis::new();
 
         let key = "Name";
         let value = RedisCell {
             value: String::from("Carlos"),
-            expiry: Some(Utc::now()),
+            expiry: Some(Utc::now() - Duration::seconds(10)),
         };
 
         redis.set(key.to_string(), value);
@@ -112,7 +118,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_not_be_expired() {
         let mut redis = Redis::new();
 
