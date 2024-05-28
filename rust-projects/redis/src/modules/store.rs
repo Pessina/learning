@@ -28,12 +28,16 @@ impl Redis {
             if expiry > Utc::now() {
                 self.map.get(key)
             } else {
-                self.map.remove(key);
+                self.delete(key);
                 None
             }
         } else {
             self.map.get(key)
         }
+    }
+
+    pub fn delete(&mut self, key: &str) -> Option<RedisCell> {
+        self.map.remove(key)
     }
 }
 

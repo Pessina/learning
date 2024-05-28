@@ -90,6 +90,25 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
 
                     Some(format!("+{}\r\n", count))
                 }
+                "DEL" => {
+                    let count = args
+                        .iter()
+                        .filter_map(|x| {
+                            if let RedisDeserializationTypes::BulkString(s) = x {
+                                Some(s)
+                            } else {
+                                None
+                            }
+                        })
+                        .fold(0, |acc, x| {
+                            match redis.lock().unwrap().delete(x) {
+                                Some(_) => acc + 1,
+                                None => acc,
+                            }
+                        });
+
+                    Some(format!("+{}\r\n", count))
+                }
                 // Mock config, to bypass redis-benchmark request
                 "CONFIG" => {
                     Some("*2\r\n$4\r\nsave\r\n$23\r\n3600 1 300 100 60 10000\r\n*2\r\n$10\r\nappendonly\r\n$2\r\nno\r\n"
@@ -135,6 +154,10 @@ mod tests {
         value: String,
     }
 
+    fn build_command(args: Vec<RedisDeserializationTypes>) -> RedisDeserializationTypes {
+        RedisDeserializationTypes::Array(Box::new(args))
+    }
+
     fn execute_set(
         redis: Arc<Mutex<Redis>>,
         key: String,
@@ -157,26 +180,46 @@ mod tests {
             None => {}
         };
 
-        execute_command(&RedisDeserializationTypes::Array(Box::new(command)), redis)
+        execute_command(&build_command(command), redis)
     }
 
     fn execute_get(redis: Arc<Mutex<Redis>>, key: String) -> String {
         execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
+            &build_command(vec![
                 RedisDeserializationTypes::BulkString("GET".to_string()),
                 RedisDeserializationTypes::BulkString(key),
-            ])),
+            ]),
             redis,
         )
+    }
+
+    fn execute_exist(redis: Arc<Mutex<Redis>>, keys: Vec<String>) -> String {
+        let mut command = vec![RedisDeserializationTypes::BulkString("EXIST".to_string())];
+        command.extend(
+            keys.iter()
+                .map(|x| RedisDeserializationTypes::BulkString(x.to_string())),
+        );
+
+        execute_command(&build_command(command), redis)
+    }
+
+    fn execute_del(redis: Arc<Mutex<Redis>>, keys: Vec<String>) -> String {
+        let mut command = vec![RedisDeserializationTypes::BulkString("DEL".to_string())];
+        command.extend(
+            keys.iter()
+                .map(|x| RedisDeserializationTypes::BulkString(x.to_string())),
+        );
+
+        execute_command(&build_command(command), redis)
     }
 
     #[test]
     fn it_should_ping_pong() {
         let Setup { redis } = setup();
         let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("PING".to_string()),
-            ])),
+            &build_command(vec![RedisDeserializationTypes::BulkString(
+                "PING".to_string(),
+            )]),
             Arc::clone(&redis),
         );
         assert_eq!(response, "+PONG\r\n")
@@ -186,10 +229,10 @@ mod tests {
     fn it_should_echo() {
         let Setup { redis } = setup();
         let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
+            &build_command(vec![
                 RedisDeserializationTypes::BulkString("ECHO".to_string()),
                 RedisDeserializationTypes::BulkString("Hello World".to_string()),
-            ])),
+            ]),
             Arc::clone(&redis),
         );
         assert_eq!(response, "+Hello World\r\n")
@@ -199,9 +242,9 @@ mod tests {
     fn it_should_error_echo() {
         let Setup { redis } = setup();
         let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("ECHO".to_string()),
-            ])),
+            &build_command(vec![RedisDeserializationTypes::BulkString(
+                "ECHO".to_string(),
+            )]),
             Arc::clone(&redis),
         );
         assert_eq!(response, "-Invalid Command\r\n")
@@ -211,10 +254,10 @@ mod tests {
     fn it_should_error() {
         let Setup { redis } = setup();
         let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
+            &build_command(vec![
                 RedisDeserializationTypes::BulkString("123".to_string()),
                 RedisDeserializationTypes::BulkString("Hello World".to_string()),
-            ])),
+            ]),
             Arc::clone(&redis),
         );
         assert_eq!(response, "-Invalid Command\r\n")
@@ -265,10 +308,10 @@ mod tests {
     fn it_should_fail_set() {
         let Setup { redis } = setup();
         let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
+            &build_command(vec![
                 RedisDeserializationTypes::BulkString("SET".to_string()),
                 RedisDeserializationTypes::BulkString("Name".to_string()),
-            ])),
+            ]),
             Arc::clone(&redis),
         );
         assert_eq!(response, "-Invalid Command\r\n");
@@ -278,9 +321,9 @@ mod tests {
     fn it_should_fail_get() {
         let Setup { redis } = setup();
         let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("GET".to_string()),
-            ])),
+            &build_command(vec![RedisDeserializationTypes::BulkString(
+                "GET".to_string(),
+            )]),
             Arc::clone(&redis),
         );
         assert_eq!(response, "-Invalid Command\r\n");
@@ -400,13 +443,7 @@ mod tests {
             None,
         );
 
-        let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("EXIST".to_string()),
-                RedisDeserializationTypes::BulkString("Name".to_string()),
-            ])),
-            Arc::clone(&redis),
-        );
+        let response = execute_exist(Arc::clone(&redis), vec!["Name".to_string()]);
 
         assert_eq!(response, "+1\r\n");
     }
@@ -436,14 +473,9 @@ mod tests {
             None,
         );
 
-        let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("EXIST".to_string()),
-                RedisDeserializationTypes::BulkString("Name".to_string()),
-                RedisDeserializationTypes::BulkString("Age".to_string()),
-                RedisDeserializationTypes::BulkString("Country".to_string()),
-            ])),
+        let response = execute_exist(
             Arc::clone(&redis),
+            vec!["Name".to_string(), "Age".to_string(), "Country".to_string()],
         );
 
         assert_eq!(response, "+3\r\n");
@@ -474,16 +506,111 @@ mod tests {
             None,
         );
 
-        let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("EXIST".to_string()),
-                RedisDeserializationTypes::BulkString("Sex".to_string()),
-                RedisDeserializationTypes::BulkString("Language".to_string()),
-                RedisDeserializationTypes::BulkString("Marital Status".to_string()),
-            ])),
+        let response = execute_exist(
             Arc::clone(&redis),
+            vec![
+                "Sex".to_string(),
+                "Language".to_string(),
+                "Marital Status".to_string(),
+            ],
         );
 
+        assert_eq!(response, "+0\r\n")
+    }
+
+    #[test]
+    pub fn should_delete() {
+        let Setup { redis } = setup();
+
+        execute_set(
+            Arc::clone(&redis),
+            "Name".to_string(),
+            "Felipe".to_string(),
+            None,
+        );
+
+        let response = execute_del(Arc::clone(&redis), vec!["Name".to_string()]);
+        assert_eq!(response, "+1\r\n");
+
+        let response = execute_get(Arc::clone(&redis), "Name".to_string());
+        assert_eq!(response, "+NONE\r\n");
+    }
+
+    #[test]
+    pub fn should_delete_3() {
+        let Setup { redis } = setup();
+
+        execute_set(
+            Arc::clone(&redis),
+            "Name".to_string(),
+            "Felipe".to_string(),
+            None,
+        );
+        execute_set(
+            Arc::clone(&redis),
+            "Age".to_string(),
+            "23".to_string(),
+            None,
+        );
+        execute_set(
+            Arc::clone(&redis),
+            "Country".to_string(),
+            "UAE".to_string(),
+            None,
+        );
+
+        let response = execute_del(
+            Arc::clone(&redis),
+            vec!["Name".to_string(), "Age".to_string(), "Country".to_string()],
+        );
+        assert_eq!(response, "+3\r\n");
+
+        let response = execute_get(Arc::clone(&redis), "Name".to_string());
+        assert_eq!(response, "+NONE\r\n");
+        let response = execute_get(Arc::clone(&redis), "Age".to_string());
+        assert_eq!(response, "+NONE\r\n");
+        let response = execute_get(Arc::clone(&redis), "Country".to_string());
+        assert_eq!(response, "+NONE\r\n");
+    }
+
+    #[test]
+    pub fn should_delete_0() {
+        let Setup { redis } = setup();
+
+        execute_set(
+            Arc::clone(&redis),
+            "Name".to_string(),
+            "Felipe".to_string(),
+            None,
+        );
+        execute_set(
+            Arc::clone(&redis),
+            "Age".to_string(),
+            "23".to_string(),
+            None,
+        );
+        execute_set(
+            Arc::clone(&redis),
+            "Country".to_string(),
+            "UAE".to_string(),
+            None,
+        );
+
+        let response = execute_del(
+            Arc::clone(&redis),
+            vec![
+                "Sex".to_string(),
+                "Marital Status".to_string(),
+                "Income".to_string(),
+            ],
+        );
         assert_eq!(response, "+0\r\n");
+
+        let response = execute_get(Arc::clone(&redis), "Name".to_string());
+        assert_eq!(response, "+Felipe\r\n");
+        let response = execute_get(Arc::clone(&redis), "Age".to_string());
+        assert_eq!(response, "+23\r\n");
+        let response = execute_get(Arc::clone(&redis), "Country".to_string());
+        assert_eq!(response, "+UAE\r\n");
     }
 }
