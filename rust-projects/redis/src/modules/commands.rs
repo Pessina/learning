@@ -108,6 +108,38 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         });
 
                     Some(format!("+{}\r\n", count))
+                }, 
+                "INCR" => {
+                    match args  {
+                        [RedisDeserializationTypes::BulkString(key)] =>  {
+                            let mut redis = redis.lock().unwrap();
+                            let number = match redis.get(key) {
+                                Some(value) => {
+                                    match  value.value.parse::<i64>() {
+                                        Ok(number) => {
+                                            Some(number + 1)
+                                        }
+                                        Err(_) => None 
+                                    }
+                                }
+                                None => Some(0),
+                            };
+
+                            match number {
+                                Some(number) => {
+                                    redis.set(key.to_string(), RedisCell {
+                                        value: number.to_string(), 
+                                        expiry: None
+                                    });
+
+                                    Some("+OK\r\n".to_string())
+                                }
+                                None =>  Some("-Invalid operation on string\r\n".to_string())
+                            }
+
+                        }
+                        _ => None
+                    }
                 }
                 // Mock config, to bypass redis-benchmark request
                 "CONFIG" => {
@@ -211,6 +243,13 @@ mod tests {
         );
 
         execute_command(&build_command(command), redis)
+    }
+
+    fn execute_incr(redis: Arc<Mutex<Redis>>, key: String) -> String {
+        execute_command(&build_command(vec![
+            RedisDeserializationTypes::BulkString("INCR".to_string()),
+            RedisDeserializationTypes::BulkString(key),
+        ]), redis)
     }
 
     #[test]
@@ -612,5 +651,62 @@ mod tests {
         assert_eq!(response, "+23\r\n");
         let response = execute_get(Arc::clone(&redis), "Country".to_string());
         assert_eq!(response, "+UAE\r\n");
+    }
+
+    #[test]
+    #[ignore]
+    fn should_increment_set_0() {
+        let Setup {redis} = setup(); 
+
+        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_get(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+0\r\n".to_string());
+    }
+
+    #[test]
+    #[ignore]
+    fn should_increment() {
+        let Setup {redis} = setup(); 
+
+        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_get(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+1\r\n".to_string());
+    }
+
+    #[test]
+    #[ignore]
+    fn should_increment_set() {
+        let Setup {redis} = setup(); 
+
+        let response = execute_set(Arc::clone(&redis), "New".to_string(), "12".to_string(), None);
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_get(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+13\r\n".to_string());
+    }
+
+    #[test]
+    #[ignore]
+    fn should_fail_increment() {
+        let Setup {redis} = setup(); 
+
+        let response = execute_set(Arc::clone(&redis), "New".to_string(), "not number".to_string(), None);
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "-Invalid operation on string\r\n".to_string());
+
+        let response = execute_get(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+not number\r\n".to_string());
     }
 }

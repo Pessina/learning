@@ -21,6 +21,8 @@ pub fn handle_connection(mut stream: TcpStream, redis: Arc<Mutex<Redis>>) {
                 Ok(size) => {
                     if let Ok(command) = String::from_utf8(Vec::from(&buffer[..size])) {
                         if let Some(command) = deserialize(&mut command.as_ref()) {
+                            println!("Command: {:?}", command);
+
                             let response = execute_command(&command, Arc::clone(&redis));
 
                             stream.write_all(response.as_bytes()).unwrap();
