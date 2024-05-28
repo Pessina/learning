@@ -10,19 +10,18 @@ use super::{
 const INVALID_COMMAND: &'static str = "-Invalid Command\r\n";
 
 pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Redis>>) -> String {
-    match command {
-        RedisDeserializationTypes::Array(a) => match a[0] {
-            RedisDeserializationTypes::BulkString(ref s) => match s.as_ref() {
-                "PING" => return "+PONG\r\n".to_string(),
-                "ECHO" => {
-                    if a.len() == 2 {
-                        if let RedisDeserializationTypes::BulkString(ref echo) = a[1] {
-                            return format!("+{}\r\n", echo);
-                        }
+    let ret = match command {
+        RedisDeserializationTypes::Array(a) => match a.as_slice() {
+            [RedisDeserializationTypes::BulkString(ref c), args @ ..] => match c.as_ref() {
+                "PING" => Some("+PONG\r\n".to_string()),
+                "ECHO" => match args {
+                    [RedisDeserializationTypes::BulkString(ref echo)] => {
+                        Some(format!("+{}\r\n", echo))
                     }
-                }
-                "SET" => match a.as_slice() {
-                    [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value), rest @ ..] =>
+                    _ => None,
+                },
+                "SET" => match args {
+                    [RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value), rest @ ..] =>
                     {
                         let expiry = match rest {
                             [] => None,
@@ -59,33 +58,48 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                             },
                         );
 
-                        return "+OK\r\n".to_string();
+                        Some("+OK\r\n".to_string())
                     }
-                    _ => return INVALID_COMMAND.to_string(),
+                    _ => None,
                 },
-                "GET" => {
-                    if a.len() == 2 {
-                        if let [_, RedisDeserializationTypes::BulkString(ref key)] = a[..] {
-                            match redis.lock().unwrap().get(key) {
-                                Some(result) => return format!("+{}\r\n", result.value),
-                                None => return format!("+NONE\r\n"),
-                            }
+                "GET" => match args {
+                    [RedisDeserializationTypes::BulkString(ref key)] => {
+                        match redis.lock().unwrap().get(key) {
+                            Some(result) => Some(format!("+{}\r\n", result.value)),
+                            None => Some(format!("+NONE\r\n")),
                         }
                     }
+                    _ => None,
+                },
+                "EXIST" => {
+                    let count = args
+                    .iter()
+                    .map(|x| if let RedisDeserializationTypes::BulkString(k) = x { k } else { panic!() })
+                    .fold(0, |acc, x| {
+                            match redis.lock().unwrap().get(x) {
+                                None => acc, 
+                                Some(_) => acc + 1
+                            }
+                    });
+                
+                    Some(format!("+{}\r\n", count))
                 }
                 // Mock config, to bypass redis-benchmark request
                 "CONFIG" => {
-                    return "*2\r\n$4\r\nsave\r\n$23\r\n3600 1 300 100 60 10000\r\n*2\r\n$10\r\nappendonly\r\n$2\r\nno\r\n"
-                        .to_string();
+                    Some("*2\r\n$4\r\nsave\r\n$23\r\n3600 1 300 100 60 10000\r\n*2\r\n$10\r\nappendonly\r\n$2\r\nno\r\n"
+                        .to_string())
                 }
-                _ => {}
+                _ => None
             },
-            _ => {}
+            _ => None
         },
-        _ => {}
-    }
+        _ => None
+    };
 
-    INVALID_COMMAND.to_string()
+    match ret {
+        None => INVALID_COMMAND.to_string(),
+        Some(ret) => ret,
+    }
 }
 
 #[cfg(test)]
@@ -108,6 +122,21 @@ mod tests {
         Setup {
             redis: Arc::new(Mutex::new(Redis::new())),
         }
+    }
+
+    fn execute_set(redis: Arc<Mutex<Redis>>, key: String, value: String) -> String {
+        execute_command(&RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("SET".to_string()),
+                RedisDeserializationTypes::BulkString(key),
+                RedisDeserializationTypes::BulkString(value)
+        ])), redis)
+    }
+
+    fn execute_get(redis: Arc<Mutex<Redis>>, key: String) -> String {
+        execute_command(&RedisDeserializationTypes::Array(Box::new(vec![
+                RedisDeserializationTypes::BulkString("GET".to_string()),
+                RedisDeserializationTypes::BulkString(key),
+        ])), redis)
     }
 
     #[test]
@@ -163,53 +192,41 @@ mod tests {
     #[test]
     fn it_should_set_and_get() {
         let Setup { redis } = setup();
-        let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("SET".to_string()),
-                RedisDeserializationTypes::BulkString("Name".to_string()),
-                RedisDeserializationTypes::BulkString("Felipe".to_string()),
-            ])),
+
+        let response = execute_set(
             Arc::clone(&redis),
+            "Name".to_string(),
+            "Felipe".to_string(),
         );
+
         assert_eq!(response, "+OK\r\n");
-        let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("GET".to_string()),
-                RedisDeserializationTypes::BulkString("Name".to_string()),
-            ])),
+        let response = execute_get(
             Arc::clone(&redis),
+            "Name".to_string(),
         );
+
         assert_eq!(response, "+Felipe\r\n");
     }
 
     #[test]
     fn it_should_set_and_get_overwrite() {
         let Setup { redis } = setup();
-        let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("SET".to_string()),
-                RedisDeserializationTypes::BulkString("Name".to_string()),
-                RedisDeserializationTypes::BulkString("Felipe".to_string()),
-            ])),
+        let response = execute_set(
             Arc::clone(&redis),
+            "Name".to_string(),
+            "Felipe".to_string(),
         );
         assert_eq!(response, "+OK\r\n");
-        let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("SET".to_string()),
-                RedisDeserializationTypes::BulkString("Name".to_string()),
-                RedisDeserializationTypes::BulkString("Carlos".to_string()),
-            ])),
+
+        let response = execute_set(
             Arc::clone(&redis),
+            "Name".to_string(),
+            "Carlos".to_string(),
         );
         assert_eq!(response, "+OK\r\n");
-        let response = execute_command(
-            &RedisDeserializationTypes::Array(Box::new(vec![
-                RedisDeserializationTypes::BulkString("GET".to_string()),
-                RedisDeserializationTypes::BulkString("Name".to_string()),
-            ])),
-            Arc::clone(&redis),
-        );
+
+        let response = execute_get(redis, "Name".to_string());
+
         assert_eq!(response, "+Carlos\r\n");
     }
 
