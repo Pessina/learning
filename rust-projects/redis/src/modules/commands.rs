@@ -21,57 +21,48 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         }
                     }
                 }
-                "SET" => {
-                    if a.len() == 3 {
-                        if let [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value)] =
-                            a[..]
-                        {
-                            redis.lock().unwrap().set(
-                                key.to_string(),
-                                RedisCell {
-                                    value: value.to_string(),
-                                    expiry: None,
-                                },
-                            );
-                            return "+OK\r\n".to_string();
-                        }
-                    }
-                    if a.len() == 5 {
-                        if let [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value), RedisDeserializationTypes::BulkString(ref expiry_config), RedisDeserializationTypes::BulkString(ref expiry_value)] =
-                            a[..]
-                        {
-                            let expiry = match expiry_config.as_ref() {
-                                "EX" => {
-                                    Utc::now()
-                                        + Duration::seconds(expiry_value.parse::<i64>().unwrap())
-                                }
-                                "PX" => {
-                                    Utc::now()
-                                        + Duration::milliseconds(
-                                            expiry_value.parse::<i64>().unwrap(),
+                "SET" => match a.as_slice() {
+                    [_, RedisDeserializationTypes::BulkString(ref key), RedisDeserializationTypes::BulkString(ref value), rest @ ..] =>
+                    {
+                        let expiry = match rest {
+                            [] => None,
+                            [RedisDeserializationTypes::BulkString(ref expiry_config), RedisDeserializationTypes::BulkString(ref expiry_value)] => {
+                                Some(match expiry_config.as_ref() {
+                                    "EX" => {
+                                        Utc::now()
+                                            + Duration::seconds(expiry_value.parse().unwrap())
+                                    }
+                                    "PX" => {
+                                        Utc::now()
+                                            + Duration::milliseconds(expiry_value.parse().unwrap())
+                                    }
+                                    "EAXT" => {
+                                        Utc.timestamp_opt(expiry_value.parse().unwrap(), 0).unwrap()
+                                    }
+                                    "PXAT" => Utc
+                                        .timestamp_opt(
+                                            (expiry_value.parse::<i64>().unwrap()) / 1000,
+                                            0,
                                         )
-                                }
-                                "EAXT" => Utc
-                                    .timestamp_opt(expiry_value.parse::<i64>().unwrap(), 0)
-                                    .unwrap(),
-                                "PXAT" => Utc
-                                    .timestamp_opt((expiry_value.parse::<i64>().unwrap()) / 1000, 0)
-                                    .unwrap(),
-                                _ => return INVALID_COMMAND.to_string(),
-                            };
+                                        .unwrap(),
+                                    _ => return INVALID_COMMAND.to_string(),
+                                })
+                            }
+                            _ => return INVALID_COMMAND.to_string(),
+                        };
 
-                            redis.lock().unwrap().set(
-                                key.to_string(),
-                                RedisCell {
-                                    value: value.to_string(),
-                                    expiry: Some(expiry),
-                                },
-                            );
+                        redis.lock().unwrap().set(
+                            key.to_string(),
+                            RedisCell {
+                                value: value.to_string(),
+                                expiry,
+                            },
+                        );
 
-                            return "+OK\r\n".to_string();
-                        }
+                        return "+OK\r\n".to_string();
                     }
-                }
+                    _ => return INVALID_COMMAND.to_string(),
+                },
                 "GET" => {
                     if a.len() == 2 {
                         if let [_, RedisDeserializationTypes::BulkString(ref key)] = a[..] {
@@ -261,7 +252,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_be_expired_seconds() {
         let Setup { redis } = setup();
 
@@ -300,7 +290,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_be_expired_miliseconds() {
         let Setup { redis } = setup();
 
@@ -339,7 +328,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_be_expired_utc_seconds() {
         let Setup { redis } = setup();
 
@@ -382,7 +370,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn it_should_be_expired_utc_miliseconds() {
         let Setup { redis } = setup();
 
