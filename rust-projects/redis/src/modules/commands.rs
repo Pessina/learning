@@ -113,30 +113,68 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                     match args  {
                         [RedisDeserializationTypes::BulkString(key)] =>  {
                             let mut redis = redis.lock().unwrap();
-                            let number = match redis.get(key) {
+                            let value = match redis.get(key) {
                                 Some(value) => {
                                     match  value.value.parse::<i64>() {
                                         Ok(number) => {
-                                            Some(number + 1)
+                                            Some(RedisCell {
+                                                value: (number + 1).to_string(), 
+                                                expiry: value.expiry
+                                            })
                                         }
                                         Err(_) => None 
                                     }
                                 }
-                                None => Some(0),
+                                None => Some(RedisCell{
+                                    value: "0".to_string(),
+                                    expiry: None
+                                }),
                             };
 
-                            match number {
-                                Some(number) => {
-                                    redis.set(key.to_string(), RedisCell {
-                                        value: number.to_string(), 
-                                        expiry: None
-                                    });
+                            match value {
+                                Some(value) => {
+                                    redis.set(key.to_string(), value);
 
                                     Some("+OK\r\n".to_string())
                                 }
                                 None =>  Some("-Invalid operation on string\r\n".to_string())
                             }
 
+                        }
+                        _ => None
+                    }
+                }
+                "DECR" => {
+                    match args {
+                        [RedisDeserializationTypes::BulkString(key)] => {
+                            let mut redis = redis.lock().unwrap();
+                            let value = match redis.get(key) {
+                                Some(value) => {
+                                    match value.value.parse::<i64>() {
+                                        Ok(number) => {
+                                            Some(RedisCell {
+                                                value: (number + 1).to_string(),
+                                                expiry: value.expiry
+                                            })
+                                        }
+                                        Err(_) => None
+                                    }
+                                }
+                                None =>  {
+                                    Some(RedisCell {
+                                        value: "0".to_string(),
+                                        expiry: None
+                                    })
+                                }
+                            };
+
+                            match value {
+                                Some(value) => {
+                                    redis.set(key.to_string(), value); 
+                                    Some("+OK\r\n".to_string())
+                                },
+                                None => Some("-Invalid operation on string\r\n".to_string())
+                            }
                         }
                         _ => None
                     }
