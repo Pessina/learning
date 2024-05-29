@@ -692,7 +692,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_increment_set_0() {
         let Setup {redis} = setup(); 
 
@@ -704,7 +703,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_increment() {
         let Setup {redis} = setup(); 
 
@@ -719,7 +717,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_increment_set() {
         let Setup {redis} = setup(); 
 
@@ -734,7 +731,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_fail_increment() {
         let Setup {redis} = setup(); 
 
@@ -746,5 +742,55 @@ mod tests {
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
         assert_eq!(response, "+not number\r\n".to_string());
+    }
+
+    #[test]
+    fn should_not_change_expiry_increment_on_valid_number() {
+        let Setup {redis} = setup(); 
+
+        let expiry_time = (Utc::now() + ChronoDuration::seconds(600)).timestamp();
+
+        let response = execute_set(Arc::clone(&redis), "New".to_string(), "10".to_string(),
+         Some(SetExpiryArgs {
+                    config: "EAXT".to_string(),
+                    value: expiry_time.to_string(),
+        }));
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_get(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+11\r\n".to_string());
+
+        if let Some(value) = redis.lock().unwrap().get("New") {
+            assert_eq!(value.expiry.unwrap(), Utc.timestamp_opt(expiry_time, 0).unwrap());
+            assert_eq!(value.value, "11".to_string());
+        };
+    }
+
+    #[test]
+    fn should_not_change_expiry_increment_on_invalid_number() {
+        let Setup {redis} = setup(); 
+
+        let expiry_time = (Utc::now() + ChronoDuration::seconds(600)).timestamp();
+
+        let response = execute_set(Arc::clone(&redis), "New".to_string(), "not number".to_string(),
+         Some(SetExpiryArgs {
+                    config: "EAXT".to_string(),
+                    value: expiry_time.to_string(),
+        }));
+        assert_eq!(response, "+OK\r\n".to_string());
+
+        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "-Invalid operation on string\r\n".to_string());
+
+        let response = execute_get(Arc::clone(&redis), "New".to_string());
+        assert_eq!(response, "+not number\r\n".to_string());
+
+        if let Some(value) = redis.lock().unwrap().get("New") {
+            assert_eq!(value.expiry.unwrap(), Utc.timestamp_opt(expiry_time, 0).unwrap());
+            assert_eq!(value.value, "not number".to_string());
+        };
     }
 }
