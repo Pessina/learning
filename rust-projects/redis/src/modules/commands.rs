@@ -8,6 +8,46 @@ use super::{
 };
 
 const INVALID_COMMAND: &'static str = "-Invalid Command\r\n";
+const OK_COMMAND: &'static str = "+OK\r\n";
+
+pub fn arithmetic_command<F>(redis: &Arc<Mutex<Redis>>, key: &str, f: F, default: Option<i64>) -> Result<String, String>
+where
+    F: Fn(i64) -> i64 {
+        let mut redis = redis.lock().unwrap();
+        let value = match redis.get(key) {
+            Some(value) => {
+                match value.value.parse::<i64>() {
+                    Ok(number) => {
+                        Some(RedisCell {
+                            value: (f(number)).to_string(),
+                            expiry: value.expiry
+                        })
+                    }
+                    Err(_) => None
+                }
+            }
+            None =>  {
+                match default {
+                    Some(default) => {
+                        Some(RedisCell {
+                            value: default.to_string(),
+                            expiry: None
+                        })
+                    }
+                    None => None
+                }
+                
+            }
+        };
+
+        match value {
+            Some(value) => {
+                redis.set(key.to_string(), value); 
+                Ok(OK_COMMAND.to_string().to_string())
+            },
+            None => Err("-Invalid operation on string\r\n".to_string())
+        }
+}
 
 pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Redis>>) -> String {
     let ret = match command {
@@ -58,7 +98,7 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                             },
                         );
 
-                        Some("+OK\r\n".to_string())
+                        Some(OK_COMMAND.to_string().to_string())
                     }
                     _ => None,
                 },
@@ -112,34 +152,10 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                 "INCR" => {
                     match args  {
                         [RedisDeserializationTypes::BulkString(key)] =>  {
-                            let mut redis = redis.lock().unwrap();
-                            let value = match redis.get(key) {
-                                Some(value) => {
-                                    match  value.value.parse::<i64>() {
-                                        Ok(number) => {
-                                            Some(RedisCell {
-                                                value: (number + 1).to_string(), 
-                                                expiry: value.expiry
-                                            })
-                                        }
-                                        Err(_) => None 
-                                    }
-                                }
-                                None => Some(RedisCell{
-                                    value: "0".to_string(),
-                                    expiry: None
-                                }),
-                            };
-
-                            match value {
-                                Some(value) => {
-                                    redis.set(key.to_string(), value);
-
-                                    Some("+OK\r\n".to_string())
-                                }
-                                None =>  Some("-Invalid operation on string\r\n".to_string())
+                            match arithmetic_command(&redis, key, |x| x + 1, Some(0)) {
+                                Ok(_) => Some(OK_COMMAND.to_string().to_string()),
+                                Err(s) => Some(s)
                             }
-
                         }
                         _ => None
                     }
@@ -147,34 +163,11 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                 "DECR" => {
                     match args {
                         [RedisDeserializationTypes::BulkString(key)] => {
-                            let mut redis = redis.lock().unwrap();
-                            let value = match redis.get(key) {
-                                Some(value) => {
-                                    match value.value.parse::<i64>() {
-                                        Ok(number) => {
-                                            Some(RedisCell {
-                                                value: (number + 1).to_string(),
-                                                expiry: value.expiry
-                                            })
-                                        }
-                                        Err(_) => None
-                                    }
-                                }
-                                None =>  {
-                                    Some(RedisCell {
-                                        value: "0".to_string(),
-                                        expiry: None
-                                    })
-                                }
-                            };
-
-                            match value {
-                                Some(value) => {
-                                    redis.set(key.to_string(), value); 
-                                    Some("+OK\r\n".to_string())
-                                },
-                                None => Some("-Invalid operation on string\r\n".to_string())
+                            match arithmetic_command(&redis, key, |x| x - 1, Some(0)) {
+                                Ok(_) => Some(OK_COMMAND.to_string().to_string()),
+                                Err(s) => Some(s)
                             }
+                            
                         }
                         _ => None
                     }
@@ -351,7 +344,7 @@ mod tests {
             None,
         );
 
-        assert_eq!(response, "+OK\r\n");
+        assert_eq!(response, OK_COMMAND.to_string());
         let response = execute_get(Arc::clone(&redis), "Name".to_string());
 
         assert_eq!(response, "+Felipe\r\n");
@@ -366,7 +359,7 @@ mod tests {
             "Felipe".to_string(),
             None,
         );
-        assert_eq!(response, "+OK\r\n");
+        assert_eq!(response, OK_COMMAND.to_string());
 
         let response = execute_set(
             Arc::clone(&redis),
@@ -374,7 +367,7 @@ mod tests {
             "Carlos".to_string(),
             None,
         );
-        assert_eq!(response, "+OK\r\n");
+        assert_eq!(response, OK_COMMAND.to_string());
 
         let response = execute_get(redis, "Name".to_string());
 
@@ -696,7 +689,7 @@ mod tests {
         let Setup {redis} = setup(); 
 
         let response = execute_incr(Arc::clone(&redis), "New".to_string());
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
         assert_eq!(response, "+0\r\n".to_string());
@@ -707,10 +700,10 @@ mod tests {
         let Setup {redis} = setup(); 
 
         let response = execute_incr(Arc::clone(&redis), "New".to_string());
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_incr(Arc::clone(&redis), "New".to_string());
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
         assert_eq!(response, "+1\r\n".to_string());
@@ -721,10 +714,10 @@ mod tests {
         let Setup {redis} = setup(); 
 
         let response = execute_set(Arc::clone(&redis), "New".to_string(), "12".to_string(), None);
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_incr(Arc::clone(&redis), "New".to_string());
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
         assert_eq!(response, "+13\r\n".to_string());
@@ -735,7 +728,7 @@ mod tests {
         let Setup {redis} = setup(); 
 
         let response = execute_set(Arc::clone(&redis), "New".to_string(), "not number".to_string(), None);
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_incr(Arc::clone(&redis), "New".to_string());
         assert_eq!(response, "-Invalid operation on string\r\n".to_string());
@@ -755,10 +748,10 @@ mod tests {
                     config: "EAXT".to_string(),
                     value: expiry_time.to_string(),
         }));
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_incr(Arc::clone(&redis), "New".to_string());
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
         assert_eq!(response, "+11\r\n".to_string());
@@ -780,7 +773,7 @@ mod tests {
                     config: "EAXT".to_string(),
                     value: expiry_time.to_string(),
         }));
-        assert_eq!(response, "+OK\r\n".to_string());
+        assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_incr(Arc::clone(&redis), "New".to_string());
         assert_eq!(response, "-Invalid operation on string\r\n".to_string());
