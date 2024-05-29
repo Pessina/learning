@@ -10,42 +10,29 @@ use super::{
 const INVALID_COMMAND: &'static str = "-Invalid Command\r\n";
 const OK_COMMAND: &'static str = "+OK\r\n";
 
-pub fn arithmetic_command<F>(redis: &Arc<Mutex<Redis>>, key: &str, f: F, default: Option<i64>) -> Result<String, String>
+pub fn arithmetic_command<F>(redis: &Arc<Mutex<Redis>>, key: &str, f: F, default: Option<i64>) -> Result<(), ()>
 where
     F: Fn(i64) -> i64 {
         let mut redis = redis.lock().unwrap();
         let value = match redis.get(key) {
             Some(value) => {
-                match value.value.parse::<i64>() {
-                    Ok(number) => {
-                        Some(RedisCell {
-                            value: (f(number)).to_string(),
-                            expiry: value.expiry
-                        })
-                    }
-                    Err(_) => None
-                }
+                value.value.parse::<i64>().map(|number| RedisCell {
+                    value: (f(number)).to_string(),
+                    expiry: value.expiry
+                }).ok()
             }
-            None =>  {
-                match default {
-                    Some(default) => {
-                        Some(RedisCell {
-                            value: default.to_string(),
-                            expiry: None
-                        })
-                    }
-                    None => None
-                }
-                
-            }
+            None => default.map(|default| RedisCell {
+                value: default.to_string(), 
+                expiry: None
+            })
         };
 
         match value {
             Some(value) => {
                 redis.set(key.to_string(), value); 
-                Ok(OK_COMMAND.to_string().to_string())
+                Ok(())
             },
-            None => Err("-Invalid operation on string\r\n".to_string())
+            None => Err(())
         }
 }
 
@@ -154,7 +141,7 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         [RedisDeserializationTypes::BulkString(key)] =>  {
                             match arithmetic_command(&redis, key, |x| x + 1, Some(0)) {
                                 Ok(_) => Some(OK_COMMAND.to_string().to_string()),
-                                Err(s) => Some(s)
+                                Err(_) => Some("-Invalid operation on string\r\n".to_string())
                             }
                         }
                         _ => None
@@ -165,9 +152,8 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         [RedisDeserializationTypes::BulkString(key)] => {
                             match arithmetic_command(&redis, key, |x| x - 1, Some(0)) {
                                 Ok(_) => Some(OK_COMMAND.to_string().to_string()),
-                                Err(s) => Some(s)
+                                Err(_) => Some("-Invalid operation on string\r\n".to_string())
                             }
-                            
                         }
                         _ => None
                     }
@@ -194,8 +180,7 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
 mod tests {
 
     use std::{
-        thread::{self},
-        time::Duration,
+        process::Command, thread, time::Duration
     };
 
     use chrono::{Duration as ChronoDuration, Utc};
@@ -276,9 +261,15 @@ mod tests {
         execute_command(&build_command(command), redis)
     }
 
-    fn execute_incr(redis: Arc<Mutex<Redis>>, key: String) -> String {
+    #[derive(PartialEq)]
+    enum ArithmeticCommand {
+        INCR, 
+        DECR
+    }
+
+    fn execute_incr_or_decr(redis: Arc<Mutex<Redis>>, key: String, command: ArithmeticCommand) -> String {
         execute_command(&build_command(vec![
-            RedisDeserializationTypes::BulkString("INCR".to_string()),
+            RedisDeserializationTypes::BulkString((if command == ArithmeticCommand::INCR { "INCR" } else { "DECR" }).to_string()),
             RedisDeserializationTypes::BulkString(key),
         ]), redis)
     }
@@ -688,7 +679,7 @@ mod tests {
     fn should_increment_set_0() {
         let Setup {redis} = setup(); 
 
-        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        let response = execute_incr_or_decr(Arc::clone(&redis), "New".to_string(), ArithmeticCommand::INCR);
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
@@ -699,10 +690,10 @@ mod tests {
     fn should_increment() {
         let Setup {redis} = setup(); 
 
-        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        let response = execute_incr_or_decr(Arc::clone(&redis), "New".to_string(), ArithmeticCommand::INCR);
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
-        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        let response = execute_incr_or_decr(Arc::clone(&redis), "New".to_string(), ArithmeticCommand::INCR);
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
@@ -716,7 +707,7 @@ mod tests {
         let response = execute_set(Arc::clone(&redis), "New".to_string(), "12".to_string(), None);
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
-        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        let response = execute_incr_or_decr(Arc::clone(&redis), "New".to_string(), ArithmeticCommand::INCR);
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
@@ -730,7 +721,7 @@ mod tests {
         let response = execute_set(Arc::clone(&redis), "New".to_string(), "not number".to_string(), None);
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
-        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        let response = execute_incr_or_decr(Arc::clone(&redis), "New".to_string(), ArithmeticCommand::INCR);
         assert_eq!(response, "-Invalid operation on string\r\n".to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
@@ -750,7 +741,7 @@ mod tests {
         }));
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
-        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        let response = execute_incr_or_decr(Arc::clone(&redis), "New".to_string(), ArithmeticCommand::INCR);
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
@@ -775,7 +766,7 @@ mod tests {
         }));
         assert_eq!(response, OK_COMMAND.to_string().to_string());
 
-        let response = execute_incr(Arc::clone(&redis), "New".to_string());
+        let response = execute_incr_or_decr(Arc::clone(&redis), "New".to_string(), ArithmeticCommand::INCR);
         assert_eq!(response, "-Invalid operation on string\r\n".to_string());
 
         let response = execute_get(Arc::clone(&redis), "New".to_string());
