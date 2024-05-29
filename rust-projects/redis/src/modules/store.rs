@@ -8,6 +8,11 @@ pub struct RedisCell {
     pub expiry: Option<DateTime<Utc>>,
 }
 
+enum ListPlacement {
+    LEFT,
+    RIGHT,
+}
+
 pub struct Redis {
     map: HashMap<String, RedisCell>,
 }
@@ -39,6 +44,13 @@ impl Redis {
     pub fn delete(&mut self, key: &str) -> Option<RedisCell> {
         self.map.remove(key)
     }
+
+    // pub fn set_list(&mut self, key: String, value: String, placement: ListPlacement) {
+    //     match self.get(&key) {
+    //         Some(value) => value.value,
+    //         None => (),
+    //     }
+    // }
 }
 
 #[cfg(test)]

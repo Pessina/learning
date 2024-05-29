@@ -179,10 +179,8 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
 #[cfg(test)]
 mod tests {
 
-    use std::{
-        process::Command, thread, time::Duration
-    };
-
+    use std::{thread, time::Duration};
+    
     use chrono::{Duration as ChronoDuration, Utc};
 
     use super::*;
