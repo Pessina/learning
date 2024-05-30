@@ -44,4 +44,25 @@ mod test {
             "[1, a, A, B, 123 sdlkjfsd fsd f, ksdjfds0928340921lfkdsjkfl lskjfds, aaaaaaaa]";
         assert!(is_array_pattern(arr_str))
     }
+
+    #[test]
+    #[ignore]
+    fn should_not_match_non_array_string() {
+        let non_arr_str = "not an array";
+        assert!(!is_array_pattern(non_arr_str))
+    }
+
+    #[test]
+    #[ignore]
+    fn should_not_match_malformed_array() {
+        let malformed_arr_str = "[1, 2, 3";
+        assert!(!is_array_pattern(malformed_arr_str))
+    }
+
+    #[test]
+    #[ignore]
+    fn should_not_match_array_with_invalid_characters() {
+        let invalid_char_arr_str = "[1, 2, @, #]";
+        assert!(!is_array_pattern(invalid_char_arr_str))
+    }
 }
