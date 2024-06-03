@@ -2,17 +2,12 @@ use std::collections::HashMap;
 
 use chrono::prelude::*;
 
-use super::regex::is_array_pattern;
+use super::string_array::{insert_on_array, ArrayPlacement};
 
 #[derive(Debug)]
 pub struct RedisCell {
     pub value: String,
     pub expiry: Option<DateTime<Utc>>,
-}
-
-enum ListPlacement {
-    LEFT,
-    RIGHT,
 }
 
 pub struct Redis {
@@ -47,25 +42,39 @@ impl Redis {
         self.map.remove(key)
     }
 
-    pub fn set_list(&mut self, key: String, value: String, placement: ListPlacement) -> u32 {
-        let cell = match self.get(&key) {
-            Some(value) => {
-                if is_array_pattern(&value.value) {
-                    Ok(RedisCell {
-                        value: "[]".to_string(),
-                        expiry: None,
-                    })
-                } else {
-                    Err(())
-                }
-            }
-            None => Ok(RedisCell {
-                value: "[]".to_string(),
-                expiry: None,
-            }),
-        };
+    pub fn set_list(
+        &mut self,
+        key: String,
+        value: String,
+        placement: ArrayPlacement,
+    ) -> Result<u32, String> {
+        let redis_return = self.get(&key);
+        match redis_return {
+            Some(cell) => {
+                let (new_value, len) = insert_on_array(cell.value.as_str(), &value, placement)?;
+                let expiry = cell.expiry;
+                self.set(
+                    key,
+                    RedisCell {
+                        value: new_value,
+                        expiry,
+                    },
+                );
 
-        3
+                Ok(len)
+            }
+            None => {
+                self.set(
+                    key.to_string(),
+                    RedisCell {
+                        value: format!("[{}]", value),
+                        expiry: None,
+                    },
+                );
+
+                Ok(1)
+            }
+        }
     }
 }
 
@@ -165,5 +174,52 @@ pub mod tests {
             Some(_) => assert!(true),
             None => assert!(false),
         }
+    }
+
+    #[test]
+    #[ignore]
+    fn should_create_and_insert_on_array() {
+        let mut redis = Redis::new();
+
+        let result = redis.set_list(
+            "arr".to_string(),
+            "first".to_string(),
+            ArrayPlacement::RIGHT,
+        );
+
+        assert_eq!(1, result.unwrap());
+        assert_eq!("[first]", redis.get("arr").unwrap().value);
+
+        let result = redis.set_list(
+            "arr".to_string(),
+            "second".to_string(),
+            ArrayPlacement::RIGHT,
+        );
+
+        assert_eq!(2, result.unwrap());
+        assert_eq!("[first,second]", redis.get("arr").unwrap().value);
+
+        let result = redis.set_list("arr".to_string(), "third".to_string(), ArrayPlacement::LEFT);
+
+        assert_eq!(3, result.unwrap());
+        assert_eq!("[third,first,second]", redis.get("arr").unwrap().value)
+    }
+
+    #[test]
+    #[ignore]
+    fn should_fail_fail_insert_on_array_string() {
+        let mut redis = Redis::new();
+
+        redis.set(
+            "arr".to_string(),
+            RedisCell {
+                value: "first".to_string(),
+                expiry: None,
+            },
+        );
+
+        let result = redis.set_list("arr".to_string(), "third".to_string(), ArrayPlacement::LEFT);
+
+        assert!(result.is_err())
     }
 }

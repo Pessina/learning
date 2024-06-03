@@ -6,30 +6,34 @@ pub enum ArrayPlacement {
     RIGHT,
 }
 
-pub fn is_array_pattern(s: &str) -> bool {
+fn is_array_pattern(s: &str) -> bool {
     let re = Regex::new(r"^\[\s*([a-zA-Z0-9 ]+,\s*)*[a-zA-Z0-9 ]*\s*\]$").unwrap();
     re.is_match(s)
 }
 
-pub fn insert_on_array(s: &str, value: &str, placement: ArrayPlacement) -> Result<String, String> {
-    if is_array_pattern(s) {
-        if value == "" {
-            return Ok(s.to_string());
-        }
-
-        let s = s.trim();
+pub fn insert_on_array(
+    array: &str,
+    value: &str,
+    placement: ArrayPlacement,
+) -> Result<(String, u32), String> {
+    if is_array_pattern(array) {
+        let s = array.trim();
         let mut s: Vec<&str> = s[1..s.len() - 1]
             .split(",")
             .filter(|v| v.len() > 0)
             .collect();
 
-        if placement == ArrayPlacement::LEFT {
+        if value == "" {
+            return Ok((array.to_string(), s.len() as u32));
+        }
+
+        if placement == ArrayPlacement::RIGHT {
             s.push(value);
         } else {
             s.insert(0, value)
         }
 
-        Ok(format!("[{}]", s.join(",")))
+        Ok((format!("[{}]", s.join(",")), s.len() as u32))
     } else {
         Err("The string it's not an array".to_string())
     }
@@ -85,45 +89,45 @@ mod test {
     fn should_insert_on_array_4_elements() {
         let array = "[1,2,3]";
 
-        let result = insert_on_array(array, "4", ArrayPlacement::LEFT);
+        let result = insert_on_array(array, "4", ArrayPlacement::RIGHT);
 
-        assert_eq!("[1,2,3,4]", result.unwrap())
+        assert_eq!(("[1,2,3,4]".to_string(), 4), result.unwrap())
     }
 
     #[test]
     fn should_not_insert_on_array_right() {
         let array = "[element]";
 
-        let result = insert_on_array(array, "3", ArrayPlacement::RIGHT);
+        let result = insert_on_array(array, "3", ArrayPlacement::LEFT);
 
-        assert_eq!("[3,element]", result.unwrap())
+        assert_eq!(("[3,element]".to_string(), 2), result.unwrap())
     }
 
     #[test]
     fn should_not_insert_on_array_right_multiple_times() {
         let array = "[element]";
 
-        let result = insert_on_array(array, "3", ArrayPlacement::RIGHT);
-        let result = insert_on_array(&result.unwrap(), "4", ArrayPlacement::RIGHT);
-        let result = insert_on_array(&result.unwrap(), "5", ArrayPlacement::RIGHT);
+        let result = insert_on_array(array, "3", ArrayPlacement::LEFT);
+        let result = insert_on_array(&result.unwrap().0, "4", ArrayPlacement::LEFT);
+        let result = insert_on_array(&result.unwrap().0, "5", ArrayPlacement::LEFT);
 
-        assert_eq!("[5,4,3,element]", result.unwrap())
+        assert_eq!(("[5,4,3,element]".to_string(), 4), result.unwrap())
     }
 
     #[test]
     fn should_insert_on_array_empty() {
         let array = "[]";
 
-        let result = insert_on_array(array, "my name", ArrayPlacement::LEFT);
+        let result = insert_on_array(array, "my name", ArrayPlacement::RIGHT);
 
-        assert_eq!("[my name]", result.unwrap())
+        assert_eq!(("[my name]".to_string(), 1), result.unwrap())
     }
 
     #[test]
     fn should_error_on_insert_on_array_empty_string() {
         let array = "";
 
-        let result = insert_on_array(array, "my name", ArrayPlacement::LEFT);
+        let result = insert_on_array(array, "my name", ArrayPlacement::RIGHT);
 
         assert!(result.is_err())
     }
@@ -132,7 +136,7 @@ mod test {
     fn should_error_on_insert_on_array_2_string() {
         let array = "my name";
 
-        let result = insert_on_array(array, "my name", ArrayPlacement::LEFT);
+        let result = insert_on_array(array, "my name", ArrayPlacement::RIGHT);
 
         assert!(result.is_err())
     }
@@ -141,19 +145,19 @@ mod test {
     fn should_error_on_insert_on_array_multiple_times() {
         let array = "[element]";
 
-        let result = insert_on_array(array, "my name", ArrayPlacement::LEFT);
-        let result = insert_on_array(&result.unwrap(), "3", ArrayPlacement::LEFT);
-        let result = insert_on_array(&result.unwrap(), "", ArrayPlacement::LEFT);
+        let result = insert_on_array(array, "my name", ArrayPlacement::RIGHT);
+        let result = insert_on_array(&result.unwrap().0, "3", ArrayPlacement::RIGHT);
+        let result = insert_on_array(&result.unwrap().0, "", ArrayPlacement::RIGHT);
 
-        assert_eq!("[element,my name,3]", result.unwrap())
+        assert_eq!(("[element,my name,3]".to_string(), 3), result.unwrap())
     }
 
     #[test]
     fn should_not_insert_on_array_empty_element() {
         let array = "[]";
 
-        let result = insert_on_array(array, "", ArrayPlacement::LEFT);
+        let result = insert_on_array(array, "", ArrayPlacement::RIGHT);
 
-        assert_eq!("[]", result.unwrap())
+        assert_eq!(("[]".to_string(), 0), result.unwrap())
     }
 }
