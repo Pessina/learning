@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use chrono::prelude::*;
 
+use super::regex::is_array_pattern;
+
 #[derive(Debug)]
 pub struct RedisCell {
     pub value: String,
@@ -45,12 +47,26 @@ impl Redis {
         self.map.remove(key)
     }
 
-    // pub fn set_list(&mut self, key: String, value: String, placement: ListPlacement) {
-    //     match self.get(&key) {
-    //         Some(value) => value.value,
-    //         None => (),
-    //     }
-    // }
+    pub fn set_list(&mut self, key: String, value: String, placement: ListPlacement) -> u32 {
+        let cell = match self.get(&key) {
+            Some(value) => {
+                if is_array_pattern(&value.value) {
+                    Ok(RedisCell {
+                        value: "[]".to_string(),
+                        expiry: None,
+                    })
+                } else {
+                    Err(())
+                }
+            }
+            None => Ok(RedisCell {
+                value: "[]".to_string(),
+                expiry: None,
+            }),
+        };
+
+        3
+    }
 }
 
 #[cfg(test)]
