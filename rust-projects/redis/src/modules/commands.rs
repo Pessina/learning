@@ -10,6 +10,21 @@ use super::{
 const INVALID_COMMAND: &'static str = "-Invalid Command\r\n";
 const OK_COMMAND: &'static str = "+OK\r\n";
 
+/// Performs an arithmetic operation on a value stored in Redis at a given key.
+///
+/// This function locks the Redis store, retrieves the value associated with the specified key,
+/// applies a user-defined arithmetic function `f` to it, and stores the result back into Redis.
+/// If the key does not exist, and a default value is provided, it sets the key to this default value.
+///
+/// # Arguments
+/// * `redis` - A shared, mutable reference to the Redis store wrapped in an Arc and Mutex.
+/// * `key` - The key in the Redis store where the value is stored.
+/// * `f` - A closure that defines the arithmetic operation to perform on the retrieved value.
+/// * `default` - An optional default value to use if the key does not exist in Redis.
+///
+/// # Returns
+/// * `Ok(())` if the operation was successful.
+/// * `Err(())` if the operation failed, including if the value could not be parsed as an integer.
 pub fn arithmetic_command<F>(redis: &Arc<Mutex<Redis>>, key: &str, f: F, default: Option<i64>) -> Result<(), ()>
 where
     F: Fn(i64) -> i64 {
@@ -36,6 +51,14 @@ where
         }
 }
 
+/// Executes a given Redis command by deserializing it and applying the corresponding operation on the Redis store.
+///
+/// # Arguments
+/// * `command` - A reference to the deserialized Redis command to be executed.
+/// * `redis` - An `Arc<Mutex<Redis>>` shared among threads, allowing synchronized access to the Redis store.
+///
+/// # Returns
+/// A `String` representing the result of the command execution, which could be a success message, error message, or data retrieved from the store.
 pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Redis>>) -> String {
     let ret = match command {
         RedisDeserializationTypes::Array(a) => match a.as_slice() {
