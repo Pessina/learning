@@ -1,27 +1,20 @@
-use std::{
-    collections::HashMap,
-    fmt::{format, Display},
-};
+use std::collections::HashMap;
+
+use chrono::serde::ts_seconds_option;
 
 use chrono::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use super::string_array::{insert_on_array, ArrayPlacement};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RedisCell {
     pub value: String,
+    #[serde(with = "ts_seconds_option")]
     pub expiry: Option<DateTime<Utc>>,
 }
 
-impl Display for RedisCell {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.expiry {
-            Some(e) => write!(f, "{},{}", self.value, e.to_string()),
-            None => write!(f, "{}", self.value),
-        }
-    }
-}
-
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Redis {
     map: HashMap<String, RedisCell>,
 }
@@ -87,21 +80,6 @@ impl Redis {
                 Ok(1)
             }
         }
-    }
-}
-
-impl Display for Redis {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut entries: Vec<_> = self.map.iter().collect();
-        entries.sort_by(|a, b| a.0.cmp(b.0));
-
-        write!(
-            f,
-            "{}",
-            entries.iter().fold(String::from(""), |acc, entry| {
-                format!("{}\n{},{}", acc, entry.0, entry.1)
-            })
-        )
     }
 }
 
@@ -250,7 +228,7 @@ pub mod tests {
 
     #[test]
     #[ignore]
-    fn should_to_string() {
+    fn should_serialize_and_deserialize() {
         let mut redis = Redis::new();
 
         redis.set(
@@ -287,21 +265,46 @@ pub mod tests {
             },
         );
 
-        let result = redis.to_string();
+        let serialized = serde_json::to_string(&redis).unwrap();
+        let redis_deserialized: Redis = serde_json::from_str(&serialized).unwrap();
 
+        let first = redis_deserialized.map.get("first").unwrap();
+        assert_eq!("1", first.value);
+        assert_eq!(None, first.expiry);
+
+        let second = redis_deserialized.map.get("second").unwrap();
+        assert_eq!("2", second.value);
         assert_eq!(
-            "\nfirst,1\nfourth,4,1970-01-12 13:46:40 UTC\nsecond,2,2286-11-20 17:46:40 UTC\nthird,3",
-            result.to_string()
-        )
+            Some(DateTime::from(
+                Utc.timestamp_opt((10 as i64).pow(10), 0).unwrap(),
+            )),
+            second.expiry
+        );
+
+        let third = redis_deserialized.map.get("third").unwrap();
+        assert_eq!("3", third.value);
+        assert_eq!(None, third.expiry);
+
+        let fourth = redis_deserialized.map.get("fourth").unwrap();
+        assert_eq!("4", fourth.value);
+        assert_eq!(
+            Some(DateTime::from(Utc.timestamp_opt(1_000_000, 0).unwrap())),
+            fourth.expiry
+        );
+
+        assert_eq!(redis_deserialized.map.len(), 4);
     }
 
     #[test]
     #[ignore]
-    fn should_to_string_empty() {
+    fn should_serialize_and_deserialize_empty() {
         let redis = Redis::new();
 
-        let result = redis.to_string();
+        let serialized = serde_json::to_string(&redis).unwrap();
+        let redis_deserialized: Redis = serde_json::from_str(&serialized).unwrap();
 
-        assert_eq!("", result.to_string())
+        println!("{}", redis_deserialized.map.len());
+
+        assert_eq!(redis_deserialized.map.len(), 0);
     }
 }
