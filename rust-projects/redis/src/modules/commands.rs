@@ -190,7 +190,7 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         }
                         _ => None,
                     }
-                }
+                }, 
                 // Mock config, to bypass redis-benchmark request
                 "CONFIG" => {
                     Some("*2\r\n$4\r\nsave\r\n$23\r\n3600 1 300 100 60 10000\r\n*2\r\n$10\r\nappendonly\r\n$2\r\nno\r\n"

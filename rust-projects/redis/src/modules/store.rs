@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{format, Display},
+};
 
 use chrono::prelude::*;
 
@@ -8,6 +11,15 @@ use super::string_array::{insert_on_array, ArrayPlacement};
 pub struct RedisCell {
     pub value: String,
     pub expiry: Option<DateTime<Utc>>,
+}
+
+impl Display for RedisCell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.expiry {
+            Some(e) => write!(f, "{},{}", self.value, e.to_string()),
+            None => write!(f, "{}", self.value),
+        }
+    }
 }
 
 pub struct Redis {
@@ -78,8 +90,22 @@ impl Redis {
     }
 }
 
+impl Display for Redis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.map.iter().fold(String::from(""), |acc, entry| {
+                format!("{}\n{},{}", acc, entry.0, entry.1)
+            })
+        )
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
+    use std::fmt::Debug;
+
     use chrono::Duration;
 
     use super::*;
@@ -219,5 +245,49 @@ pub mod tests {
         let result = redis.set_list("arr".to_string(), "third".to_string(), ArrayPlacement::LEFT);
 
         assert!(result.is_err())
+    }
+
+    #[test]
+    #[ignore]
+    fn should_to_string() {
+        let mut redis = Redis::new();
+
+        redis.set(
+            "first".to_string(),
+            RedisCell {
+                value: "1".to_string(),
+                expiry: None,
+            },
+        );
+
+        redis.set(
+            "second".to_string(),
+            RedisCell {
+                value: "2".to_string(),
+                expiry: None,
+            },
+        );
+
+        redis.set(
+            "third".to_string(),
+            RedisCell {
+                value: "3".to_string(),
+                expiry: None,
+            },
+        );
+
+        redis.set(
+            "fourth".to_string(),
+            RedisCell {
+                value: "4".to_string(),
+                expiry: Some(DateTime::from(Utc::now())),
+            },
+        );
+
+        let result = redis.to_string();
+
+        println!("{}", result);
+
+        assert_eq!("", result)
     }
 }
