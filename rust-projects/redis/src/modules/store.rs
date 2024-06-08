@@ -88,29 +88,37 @@ impl Redis {
         }
     }
 
-    pub fn save(self, name: &str) {
+    pub fn save(&self) -> Result<(), std::io::Error> {
         let serialized = serde_json::to_string(&self).unwrap();
 
-        fs::create_dir_all(REDIS_STORE_DIR).expect("Failed to crete directory");
+        fs::create_dir_all(REDIS_STORE_DIR)?;
 
-        let path = format!("{}/{}", REDIS_STORE_DIR, name);
+        let path = format!("{}/{}", REDIS_STORE_DIR, "redis.txt");
         let path = Path::new(&path);
 
-        let mut file = File::create(path).expect("Failed opening file");
-        file.write(serialized.as_bytes())
-            .expect("Error writing to file");
+        let mut file = File::create(path)?;
+        file.write(serialized.as_bytes())?;
+
+        Ok(())
     }
 
-    pub fn load(name: &str) -> Redis {
-        let path = format!("{}/{}", REDIS_STORE_DIR, name);
+    pub fn load() -> Result<Redis, std::io::Error> {
+        let path = format!("{}/{}", REDIS_STORE_DIR, "redis.txt");
         let path = Path::new(&path);
 
-        let mut file = File::open(path).expect("Error opening file");
+        let mut file = File::open(path)?;
 
         let mut serialized = String::new();
-        file.read_to_string(&mut serialized).unwrap();
+        file.read_to_string(&mut serialized)?;
 
-        serde_json::from_str::<Redis>(&serialized).unwrap()
+        Ok(serde_json::from_str::<Redis>(&serialized)?)
+    }
+
+    pub fn replace_store(&mut self) -> Result<(), std::io::Error> {
+        let redis = Redis::load()?;
+        *self = redis;
+
+        Ok(())
     }
 }
 
@@ -381,8 +389,8 @@ pub mod tests {
             )
             .unwrap();
 
-        redis.save("redis.txt");
-        let mut redis = Redis::load("redis.txt");
+        redis.save().unwrap();
+        let mut redis = Redis::load().unwrap();
 
         let name = redis.get("Name").unwrap();
         assert_eq!("Felipe", name.value);
@@ -400,8 +408,8 @@ pub mod tests {
 
         redis.delete("Friends");
 
-        redis.save("redis.txt");
-        let mut redis = Redis::load("redis.txt");
+        redis.save().unwrap();
+        let mut redis = Redis::load().unwrap();
 
         let friends = redis.get("Friends");
         assert!(friends.is_none())

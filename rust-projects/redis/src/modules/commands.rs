@@ -207,6 +207,19 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                     }
                     _ => None,
                 },
+                "SAVE" => {
+                    match redis.lock().unwrap().save() {
+                        Ok(_) => Some(OK_COMMAND.to_string()),
+                        Err(_) => Some(format!("-Failed to save\r\n")),
+                        
+                    }
+                }
+                "LOAD" => {
+                    match redis.lock().unwrap().replace_store() {
+                        Ok(_) => Some(OK_COMMAND.to_string()),
+                        Err(_) => Some(format!("-Failed to load\r\n")),   
+                    }
+                }
                 // Mock config, to bypass redis-benchmark request
                 "CONFIG" => Some(
                     "*2\r\n$4\r\nsave\r\n$23\r\n3600 1 300 100 60 10000\r\n*2\r\n$10\r\nappendonly\r\n$2\r\nno\r\n"
@@ -334,10 +347,21 @@ mod tests {
         execute_command(&build_command(command), redis)
     }
 
+    fn execute_save(redis: Arc<Mutex<Redis>>) -> String {
+        let command = vec![RedisDeserializationTypes::BulkString("SAVE".to_string())];
+
+        execute_command(&build_command(command), redis)
+    }
+
+    fn execute_load(redis: Arc<Mutex<Redis>>) -> String {
+        let command = vec![RedisDeserializationTypes::BulkString("LOAD".to_string())];
+
+        execute_command(&build_command(command), redis)
+    }
+
     #[derive(PartialEq)]
     enum ArithmeticCommand {
         INCR,
-        DECR,
     }
 
     fn execute_incr_or_decr(
@@ -984,5 +1008,76 @@ mod tests {
             "+[element1,element2,element3,element4]\r\n".to_string(),
             response
         );
+    }
+
+    #[test]
+    #[ignore]
+    fn should_save_and_load() {
+        let Setup { redis } = setup();
+
+        execute_set(
+            Arc::clone(&redis),
+            "Name".to_string(),
+            "Felipe".to_string(),
+            None,
+        );
+
+        execute_set(
+            Arc::clone(&redis),
+            "Age".to_string(),
+            "23".to_string(),
+            None,
+        );
+
+        execute_set(
+            Arc::clone(&redis),
+            "Country".to_string(),
+            "UAE".to_string(),
+            None,
+        );
+
+        execute_array_push(
+            Arc::clone(&redis),
+            "array".to_string(),
+            vec![
+                "element1".to_string(),
+                "element2".to_string(),
+                "element3".to_string(),
+                "element4".to_string(),
+            ],
+            ArrayPlacement::RIGHT,
+        );
+
+        execute_array_push(
+            Arc::clone(&redis),
+            "array".to_string(),
+            vec![
+                "element5".to_string(),
+                "element6".to_string(),
+                "element7".to_string(),
+                "element8".to_string(),
+            ],
+            ArrayPlacement::RIGHT,
+        );
+
+        execute_save(Arc::clone(&redis));
+
+        execute_set(
+            Arc::clone(&redis),
+            "Test".to_string(),
+            "Should not exist".to_string(),
+            None,
+        );
+
+        execute_load(Arc::clone(&redis));
+
+        let response = execute_get(Arc::clone(&redis), "Name".to_string());
+        assert_eq!("+Felipe\r\n", response);
+        
+        let response = execute_get(Arc::clone(&redis), "array".to_string());
+        assert_eq!("+[element1,element2,element3,element4,element5,element6,element7,element8]\r\n", response);
+
+        let response = execute_get(Arc::clone(&redis), "Test".to_string());
+        assert_eq!("+NONE\r\n", response);
     }
 }
