@@ -1,3 +1,4 @@
 **/target
 *.lock
 .auth
+**/redis_store

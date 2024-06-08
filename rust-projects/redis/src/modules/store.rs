@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::io::Read;
+use std::{collections::HashMap, io::Write};
+
+use std::fs::{self, File};
+use std::path::Path;
 
 use chrono::serde::ts_seconds_option;
 
@@ -18,6 +22,8 @@ pub struct RedisCell {
 pub struct Redis {
     map: HashMap<String, RedisCell>,
 }
+
+const REDIS_STORE_DIR: &str = "redis_store";
 
 impl Redis {
     pub fn new() -> Self {
@@ -80,6 +86,31 @@ impl Redis {
                 Ok(1)
             }
         }
+    }
+
+    pub fn save(self, name: &str) {
+        let serialized = serde_json::to_string(&self).unwrap();
+
+        fs::create_dir_all(REDIS_STORE_DIR).expect("Failed to crete directory");
+
+        let path = format!("{}/{}", REDIS_STORE_DIR, name);
+        let path = Path::new(&path);
+
+        let mut file = File::create(path).expect("Failed opening file");
+        file.write(serialized.as_bytes())
+            .expect("Error writing to file");
+    }
+
+    pub fn load(name: &str) -> Redis {
+        let path = format!("{}/{}", REDIS_STORE_DIR, name);
+        let path = Path::new(&path);
+
+        let mut file = File::open(path).expect("Error opening file");
+
+        let mut serialized = String::new();
+        file.read_to_string(&mut serialized).unwrap();
+
+        serde_json::from_str::<Redis>(&serialized).unwrap()
     }
 }
 
@@ -227,7 +258,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_serialize_and_deserialize() {
         let mut redis = Redis::new();
 
@@ -296,7 +326,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_serialize_and_deserialize_empty() {
         let redis = Redis::new();
 
@@ -306,5 +335,26 @@ pub mod tests {
         println!("{}", redis_deserialized.map.len());
 
         assert_eq!(redis_deserialized.map.len(), 0);
+    }
+
+    #[test]
+    #[ignore]
+    fn should_save_and_load() {
+        let mut redis = Redis::new();
+
+        redis.set(
+            "Name".to_string(),
+            RedisCell {
+                value: "Felipe".to_string(),
+                expiry: None,
+            },
+        );
+
+        redis.save("redis.txt");
+        let mut redis = Redis::load("redis.txt");
+
+        let name = redis.get("Name").unwrap();
+
+        assert_eq!("Felipe", name.value);
     }
 }
