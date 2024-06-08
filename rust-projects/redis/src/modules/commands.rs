@@ -210,8 +210,7 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                 "SAVE" => {
                     match redis.lock().unwrap().save() {
                         Ok(_) => Some(OK_COMMAND.to_string()),
-                        Err(_) => Some(format!("-Failed to save\r\n")),
-                        
+                        Err(_) => Some(format!("-Failed to save\r\n")),       
                     }
                 }
                 "LOAD" => {
@@ -1073,9 +1072,12 @@ mod tests {
 
         let response = execute_get(Arc::clone(&redis), "Name".to_string());
         assert_eq!("+Felipe\r\n", response);
-        
+
         let response = execute_get(Arc::clone(&redis), "array".to_string());
-        assert_eq!("+[element1,element2,element3,element4,element5,element6,element7,element8]\r\n", response);
+        assert_eq!(
+            "+[element1,element2,element3,element4,element5,element6,element7,element8]\r\n",
+            response
+        );
 
         let response = execute_get(Arc::clone(&redis), "Test".to_string());
         assert_eq!("+NONE\r\n", response);
