@@ -158,22 +158,12 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
 
                     Some(format!("+{}\r\n", count))
                 }, 
-                "INCR" => {
-                    match args  {
-                        [RedisDeserializationTypes::BulkString(key)] =>  {
-                            match arithmetic_command(&redis, key, |x| x + 1, Some(0)) {
-                                Ok(_) => Some(OK_COMMAND.to_string().to_string()),
-                                Err(_) => Some("-Invalid operation on string\r\n".to_string())
-                            }
-                        }
-                        _ => None
-                    }
-                }
-                "DECR" => {
+                command @ "INCR" | command @ "DECR" => {
                     match args {
                         [RedisDeserializationTypes::BulkString(key)] => {
-                            match arithmetic_command(&redis, key, |x| x - 1, Some(0)) {
-                                Ok(_) => Some(OK_COMMAND.to_string().to_string()),
+                            let operation = if command == "INCR" { |x| x + 1 } else { |x| x - 1 };
+                            match arithmetic_command(&redis, key, operation, Some(0)) {
+                                Ok(_) => Some(OK_COMMAND.to_string()),
                                 Err(_) => Some("-Invalid operation on string\r\n".to_string())
                             }
                         }
@@ -832,7 +822,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_create_and_insert_on_array_lpush() {
         let Setup { redis } = setup();
 
@@ -849,7 +838,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_fail_insert_on_array() {
         let Setup { redis } = setup();
 
@@ -863,7 +851,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_create_and_insert_on_array_rpush() {
         let Setup { redis } = setup();
 
