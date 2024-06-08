@@ -338,7 +338,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_save_and_load() {
         let mut redis = Redis::new();
 
