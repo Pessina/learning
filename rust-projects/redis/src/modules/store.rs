@@ -350,11 +350,61 @@ pub mod tests {
             },
         );
 
+        redis.set(
+            "BirthDate".to_string(),
+            RedisCell {
+                value: "02/09/1980".to_string(),
+                expiry: Some(Utc.timestamp_opt(100_000_000_000, 0).unwrap()),
+            },
+        );
+
+        redis
+            .set_list(
+                "Friends".to_string(),
+                "Marcos".to_string(),
+                ArrayPlacement::LEFT,
+            )
+            .unwrap();
+
+        redis
+            .set_list(
+                "Friends".to_string(),
+                "Carlos".to_string(),
+                ArrayPlacement::LEFT,
+            )
+            .unwrap();
+
+        redis
+            .set_list(
+                "Friends".to_string(),
+                "Marcelo".to_string(),
+                ArrayPlacement::LEFT,
+            )
+            .unwrap();
+
         redis.save("redis.txt");
         let mut redis = Redis::load("redis.txt");
 
         let name = redis.get("Name").unwrap();
-
         assert_eq!("Felipe", name.value);
+        assert_eq!(None, name.expiry);
+
+        let birth_date = redis.get("BirthDate").unwrap();
+        assert_eq!("02/09/1980", birth_date.value);
+        assert_eq!(
+            Some(Utc.timestamp_opt(100_000_000_000, 0).unwrap()),
+            birth_date.expiry
+        );
+
+        let friends = redis.get("Friends").unwrap();
+        assert_eq!("[Marcelo,Carlos,Marcos]", friends.value);
+
+        redis.delete("Friends");
+
+        redis.save("redis.txt");
+        let mut redis = Redis::load("redis.txt");
+
+        let friends = redis.get("Friends");
+        assert!(friends.is_none())
     }
 }
