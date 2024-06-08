@@ -1,10 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::{num::NonZeroU8, result, sync::{Arc, Mutex}};
 
 use chrono::{Duration, TimeZone, Utc};
 
 use super::{
-    store::{Redis, RedisCell},
-    types::RedisDeserializationTypes,
+    store::{Redis, RedisCell}, string_array::ArrayPlacement, types::RedisDeserializationTypes
 };
 
 const INVALID_COMMAND: &'static str = "-Invalid Command\r\n";
@@ -181,6 +180,45 @@ pub fn execute_command(command: &RedisDeserializationTypes, redis: Arc<Mutex<Red
                         _ => None
                     }
                 }
+                "LPUSH" => {
+                    match args {
+                        [RedisDeserializationTypes::BulkString(key), arr_elements @ ..]
+                            if arr_elements.iter().all(|e| matches!(e, RedisDeserializationTypes::BulkString(_))) =>
+                        {
+                            let mut redis = redis.lock().unwrap();
+                            let mut ret = String::from("");
+
+                            for e in arr_elements {
+                                match e {
+                                    RedisDeserializationTypes::BulkString(value) => {
+                                        let result = redis.set_list(
+                                            key.to_string(),
+                                            value.to_string(),
+                                            ArrayPlacement::LEFT,
+                                        );
+
+                                        match result {
+                                            Ok(len) => {
+                                                ret = format!("+{}\r\n", len);
+                                            }
+                                            Err(err) => {
+                                                ret = format!("-{}\r\n", err);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        ret = INVALID_COMMAND.to_string();
+                                        break;
+                                    }
+                                }
+                            }
+
+                            Some(ret)
+                        }
+                        _ => None,
+                    }
+                }
                 // Mock config, to bypass redis-benchmark request
                 "CONFIG" => {
                     Some("*2\r\n$4\r\nsave\r\n$23\r\n3600 1 300 100 60 10000\r\n*2\r\n$10\r\nappendonly\r\n$2\r\nno\r\n"
@@ -278,6 +316,18 @@ mod tests {
             keys.iter()
                 .map(|x| RedisDeserializationTypes::BulkString(x.to_string())),
         );
+
+        execute_command(&build_command(command), redis)
+    }
+
+    fn execute_lpush(redis: Arc<Mutex<Redis>>, key: String, values: Vec<String>) -> String {
+        let mut command = vec![RedisDeserializationTypes::BulkString("LPUSH".to_string())];
+
+        command.extend([
+            RedisDeserializationTypes::BulkString(key),
+        ]);
+
+        command.extend(values.iter().map(|v| RedisDeserializationTypes::BulkString(v.to_string())));
 
         execute_command(&build_command(command), redis)
     }
@@ -797,5 +847,36 @@ mod tests {
             assert_eq!(value.expiry.unwrap(), Utc.timestamp_opt(expiry_time, 0).unwrap());
             assert_eq!(value.value, "not number".to_string());
         };
+    }
+
+    #[test]
+    #[ignore]
+    fn should_create_and_insert_on_array() {
+        let Setup { redis } = setup();
+
+        let response = execute_lpush(Arc::clone(&redis), "array".to_string(), vec![
+            "element1".to_string(),
+            "element2".to_string(),
+            "element3".to_string(),
+            "element4".to_string(),
+        ]);
+        assert_eq!("+4\r\n".to_string(), response);
+
+        let response = execute_get(redis, "array".to_string());
+        assert_eq!("+[element4,element3,element2,element1]\r\n".to_string(), response);
+    }
+
+    #[test]
+    #[ignore]
+    fn should_fail_insert_on_array() {
+        let Setup { redis } = setup();
+
+        execute_set(Arc::clone(&redis), "not_array".to_string(), "not_array".to_string(), None);
+
+        let response = execute_lpush(Arc::clone(&redis), "not_array".to_string(), vec![
+            "element1".to_string(),
+        ]);
+
+        assert_eq!("-The string it's not an array\r\n".to_string(), response);
     }
 }

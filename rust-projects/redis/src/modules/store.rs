@@ -177,7 +177,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_create_and_insert_on_array() {
         let mut redis = Redis::new();
 
@@ -206,7 +205,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_fail_fail_insert_on_array_string() {
         let mut redis = Redis::new();
 
