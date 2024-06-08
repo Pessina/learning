@@ -1010,7 +1010,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn should_save_and_load() {
         let Setup { redis } = setup();
 
