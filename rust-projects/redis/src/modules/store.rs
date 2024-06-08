@@ -92,10 +92,13 @@ impl Redis {
 
 impl Display for Redis {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut entries: Vec<_> = self.map.iter().collect();
+        entries.sort_by(|a, b| a.0.cmp(b.0));
+
         write!(
             f,
             "{}",
-            self.map.iter().fold(String::from(""), |acc, entry| {
+            entries.iter().fold(String::from(""), |acc, entry| {
                 format!("{}\n{},{}", acc, entry.0, entry.1)
             })
         )
@@ -104,8 +107,6 @@ impl Display for Redis {
 
 #[cfg(test)]
 pub mod tests {
-    use std::fmt::Debug;
-
     use chrono::Duration;
 
     use super::*;
@@ -264,7 +265,9 @@ pub mod tests {
             "second".to_string(),
             RedisCell {
                 value: "2".to_string(),
-                expiry: None,
+                expiry: Some(DateTime::from(
+                    Utc.timestamp_opt((10 as i64).pow(10), 0).unwrap(),
+                )),
             },
         );
 
@@ -280,14 +283,25 @@ pub mod tests {
             "fourth".to_string(),
             RedisCell {
                 value: "4".to_string(),
-                expiry: Some(DateTime::from(Utc::now())),
+                expiry: Some(DateTime::from(Utc.timestamp_opt(1_000_000, 0).unwrap())),
             },
         );
 
         let result = redis.to_string();
 
-        println!("{}", result);
+        assert_eq!(
+            "\nfirst,1\nfourth,4,1970-01-12 13:46:40 UTC\nsecond,2,2286-11-20 17:46:40 UTC\nthird,3",
+            result.to_string()
+        )
+    }
 
-        assert_eq!("", result)
+    #[test]
+    #[ignore]
+    fn should_to_string_empty() {
+        let redis = Redis::new();
+
+        let result = redis.to_string();
+
+        assert_eq!("", result.to_string())
     }
 }
