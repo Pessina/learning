@@ -8,7 +8,7 @@ pub struct Store {
     map: Connection,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct UrlMap {
     pub hash: String,
     pub original: String,
