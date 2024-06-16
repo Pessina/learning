@@ -1,4 +1,4 @@
-use redis::{Commands, Connection, RedisError};
+use redis::{Commands, Connection, Iter, RedisError};
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -37,5 +37,18 @@ impl Store {
             original: url.to_string(),
             short: format!("{}/{}", SERVER_URL, url_hash),
         })
+    }
+
+    pub fn get_all(&mut self) -> Result<Vec<UrlMap>, RedisError> {
+        let iter: Iter<String> = self.map.scan()?;
+        let mut keys = Vec::new();
+        iter.for_each(|key| keys.push(key));
+
+        let mut ret = Vec::new();
+        for url_hash in keys {
+            let value = self.get(url_hash.to_string())?;
+            ret.push(value)
+        }
+        Ok(ret)
     }
 }

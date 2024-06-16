@@ -6,7 +6,7 @@ use axum::{
 };
 use tokio::net::TcpListener;
 use url_shortener::modules::{
-    routes::{add_url, redirect},
+    routes::{add_url, get_all, redirect},
     store::Store,
 };
 
@@ -16,6 +16,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/add_url", post(add_url))
+        .route("/get_all", get(get_all))
         .route("/:url_hash", get(redirect))
         .layer(Extension(store));
 

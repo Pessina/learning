@@ -47,6 +47,16 @@ pub async fn redirect(
     match store.lock() {
         Ok(mut store) => match store.get(path.url_hash) {
             Ok(url_map) => Redirect::permanent(&url_map.original).into_response(),
+            Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "URL not found").into_response(),
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+pub async fn get_all(Extension(store): Extension<Arc<Mutex<Store>>>) -> impl IntoResponse {
+    match store.lock() {
+        Ok(mut store) => match store.get_all() {
+            Ok(res) => Json(res).into_response(),
             Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
         },
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
