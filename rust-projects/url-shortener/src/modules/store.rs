@@ -8,7 +8,7 @@ pub struct Store {
     map: Connection,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct UrlMap {
     pub hash: String,
     pub original: String,
@@ -32,8 +32,7 @@ impl Store {
         url_hash
     }
 
-    pub fn get(&mut self, url: &str) -> UrlMap {
-        let url_hash = format!("{:x}", xxh3_64(url.as_bytes()));
+    pub fn get(&mut self, url_hash: &str) -> UrlMap {
         let url = self
             .map
             .get::<String, String>(url_hash.to_string())
