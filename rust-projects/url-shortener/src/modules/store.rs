@@ -23,8 +23,7 @@ impl Store {
         Store { map: con }
     }
 
-    pub fn add(&mut self, url: &str) -> String {
-        let url = url.to_string();
+    pub fn add(&mut self, url: String) -> String {
         let url_hash = format!("{:x}", xxh3_64(url.as_bytes()));
         self.map
             .set::<String, String, String>(url_hash.to_string(), url)
@@ -32,11 +31,8 @@ impl Store {
         url_hash
     }
 
-    pub fn get(&mut self, url_hash: &str) -> UrlMap {
-        let url = self
-            .map
-            .get::<String, String>(url_hash.to_string())
-            .unwrap();
+    pub fn get(&mut self, url_hash: String) -> UrlMap {
+        let url = self.map.get::<String, String>(url_hash.clone()).unwrap();
         UrlMap {
             hash: url_hash.to_string(),
             original: url.to_string(),

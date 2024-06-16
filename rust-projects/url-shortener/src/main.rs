@@ -6,7 +6,7 @@ use axum::{
 };
 use tokio::net::TcpListener;
 use url_shortener::modules::{
-    routes::{add_url, echo, get_url, ping, redirect},
+    routes::{add_url, redirect},
     store::Store,
 };
 
@@ -15,10 +15,7 @@ async fn main() {
     let store = Arc::new(Mutex::new(Store::new()));
 
     let app = Router::new()
-        .route("/ping", get(ping))
-        .route("/echo", get(echo))
         .route("/add_url", post(add_url))
-        .route("/get_url", post(get_url))
         .route("/:url_hash", get(redirect))
         .layer(Extension(store));
 
