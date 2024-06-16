@@ -62,3 +62,21 @@ pub async fn get_all(Extension(store): Extension<Arc<Mutex<Store>>>) -> impl Int
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
+
+#[derive(Deserialize)]
+pub struct DeleteRequest {
+    url: String,
+}
+
+pub async fn delete_url(
+    Extension(store): Extension<Arc<Mutex<Store>>>,
+    Json(payload): Json<DeleteRequest>,
+) -> impl IntoResponse {
+    match store.lock() {
+        Ok(mut store) => match store.delete(&payload.url) {
+            Ok(res) => Json(res).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}

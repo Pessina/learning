@@ -51,4 +51,10 @@ impl Store {
         }
         Ok(ret)
     }
+
+    pub fn delete(&mut self, url: &str) -> Result<String, RedisError> {
+        let url_hash = format!("{:x}", xxh3_64(url.as_bytes()));
+        self.map.del(url_hash)?;
+        Ok(url.to_string())
+    }
 }
