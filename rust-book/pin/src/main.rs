@@ -1,4 +1,4 @@
-use std::{marker::PhantomPinned, pin::Pin};
+use std::{marker::PhantomPinned, pin::Pin, sync::mpsc};
 
 #[derive(Debug)]
 struct Test {
@@ -55,4 +55,6 @@ fn main() {
         Test::a(test2.as_ref()),
         Test::b(test2.as_ref())
     );
+
+    // Stream example
 }
