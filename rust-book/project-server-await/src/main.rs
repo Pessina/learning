@@ -1,23 +1,29 @@
-use std::{
-    fs,
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
-};
+use std::fs;
 
-fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
+use async_std::io::{Read, Write};
+use async_std::prelude::*;
+use async_std::{net::TcpListener, task::spawn};
+use futures::stream::StreamExt;
+use project_server_await::MockTcpStream;
 
-        handle_connection(stream);
-    }
+use std::marker::Unpin;
 
-    println!("Hello, world!");
+#[async_std::main]
+async fn main() {
+    let listener = TcpListener::bind("127.0.0.1:7878").await.unwrap();
+    listener
+        .incoming()
+        .for_each_concurrent(None, |tcp_stream| async move {
+            let tcp_stream = tcp_stream.unwrap();
+            spawn(handle_connection(tcp_stream));
+        })
+        .await;
 }
 
-fn handle_connection(mut stream: TcpStream) {
+async fn handle_connection(mut stream: impl Read + Write + Unpin) {
     let mut buffer = [0; 1024];
-    stream.read(&mut buffer).unwrap();
+
+    stream.read(&mut buffer).await.unwrap();
 
     let get = b"GET / HTTP/1.1\r\n";
 
@@ -30,6 +36,24 @@ fn handle_connection(mut stream: TcpStream) {
     let contents = fs::read_to_string(filename).unwrap();
     let response = format!("{status_line}{contents}");
 
-    stream.write_all(response.as_bytes()).unwrap();
-    stream.flush().unwrap()
+    stream.write_all(response.as_bytes()).await.unwrap();
+    stream.flush().await.unwrap()
+}
+
+#[async_std::test]
+async fn test_handle_connection() {
+    let input_bytes = b"GET / HTTP/1.1\r\n";
+    let mut contents = vec![0u8; 1024];
+    contents[..input_bytes.len()].clone_from_slice(input_bytes);
+    let mut stream = MockTcpStream {
+        read_data: contents,
+        write_data: Vec::new(),
+    };
+
+    handle_connection(&mut stream).await;
+
+    let expected_contents = fs::read_to_string("hello.html").unwrap();
+    let expected_response = format!("HTTP/1.1 200 OK\r\n\r\n{}", expected_contents);
+
+    assert!(stream.write_data.starts_with(expected_response.as_bytes()));
 }
