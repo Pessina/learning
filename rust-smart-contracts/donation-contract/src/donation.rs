@@ -30,7 +30,7 @@ impl Contract {
         let mut donated_so_far = self
             .donations
             .get(&donor)
-            .cloned()
+            .clone()
             .unwrap_or(NearToken::from_near(0));
 
         let to_transfer = if donated_so_far.is_zero() {
@@ -41,7 +41,7 @@ impl Contract {
 
         donated_so_far = donated_so_far.saturating_add(donation_amount);
 
-        self.donations.insert(donor.clone(), donated_so_far);
+        self.donations.insert(&donor.clone(), &donated_so_far);
 
         log!(
             "Thank you {} for donating {}! You donated a total of {}",
@@ -59,8 +59,8 @@ impl Contract {
         let amount = self
             .donations
             .get(&account_id)
-            .cloned()
             .unwrap_or(NearToken::from_near(0))
+            .clone()
             .as_yoctonear();
 
         Donation {

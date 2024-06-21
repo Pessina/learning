@@ -1,4 +1,5 @@
-use near_sdk::{near, store::UnorderedMap, AccountId, NearToken, PanicOnDefault};
+use near_sdk::collections::UnorderedMap;
+use near_sdk::{near, AccountId, NearToken, PanicOnDefault};
 
 mod donation;
 
