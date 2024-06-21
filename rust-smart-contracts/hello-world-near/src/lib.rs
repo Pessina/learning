@@ -15,6 +15,14 @@ impl Default for Contract {
 
 #[near]
 impl Contract {
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate() -> Self {
+        Self {
+            greeting: "Hello".to_string(),
+        }
+    }
+
     pub fn get_greeting(&self) -> String {
         self.greeting.clone()
     }
