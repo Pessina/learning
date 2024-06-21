@@ -1,4 +1,4 @@
-use near_sdk::near;
+use near_sdk::{log, near};
 
 #[near(contract_state)]
 pub struct Contract {
@@ -27,16 +27,19 @@ impl Contract {
 
     pub fn increment(&mut self) -> u32 {
         self.counter = self.counter + 1;
+        log!("Increased number to {}", self.counter);
         self.counter
     }
 
     pub fn decrement(&mut self) -> u32 {
         self.counter = self.counter - 1;
+        log!("Decreased number to {}", self.counter);
         self.counter
     }
 
     pub fn reset(&mut self) -> u32 {
         self.counter = 0;
+        log!("Reset counter to zero");
         self.counter
     }
 
