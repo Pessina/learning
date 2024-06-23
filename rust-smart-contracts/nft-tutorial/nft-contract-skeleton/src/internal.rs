@@ -97,6 +97,22 @@ impl Contract {
             env::log_str(&format!("Memo: {}", memo).to_string())
         };
 
+        let mut authorized_id = None;
+
+        let nft_transfer_log: EventLog = EventLog {
+            standard: NFT_STANDARD_NAME.to_string(),
+            version: NFT_METADATA_SPEC.to_string(),
+            event: EventLogVariant::NftTransfer(vec![NftTransferLog {
+                authorized_id,
+                old_owner_id: token.owner_id.to_string(),
+                new_owner_id: receiver_id.to_string(),
+                token_ids: vec![token_id.to_string()],
+                memo,
+            }]),
+        };
+
+        env::log_str(&nft_transfer_log.to_string());
+
         token
     }
 }

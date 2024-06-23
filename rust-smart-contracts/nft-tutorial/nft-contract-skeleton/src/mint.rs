@@ -19,6 +19,18 @@ impl Contract {
 
         self.internal_add_token_to_owner(&token.owner_id, &token_id);
 
+        let nft_mint_log: EventLog = EventLog {
+            standard: NFT_STANDARD_NAME.to_string(),
+            version: NFT_METADATA_SPEC.to_string(),
+            event: EventLogVariant::NftMint(vec![NftMintLog {
+                owner_id: token.owner_id.to_string(),
+                token_ids: vec![token_id.to_string()],
+                memo: None,
+            }]),
+        };
+
+        env::log_str(&nft_mint_log.to_string());
+
         let required_storage_in_bytes = env::storage_usage() - initial_storage_usage;
 
         refund_deposit(required_storage_in_bytes.into());
