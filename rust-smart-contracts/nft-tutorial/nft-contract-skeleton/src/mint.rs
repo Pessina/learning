@@ -8,6 +8,8 @@ impl Contract {
 
         let token = Token {
             owner_id: receiver_id,
+            approved_account_ids: Default::default(),
+            next_approval_id: 0,
         };
 
         assert!(

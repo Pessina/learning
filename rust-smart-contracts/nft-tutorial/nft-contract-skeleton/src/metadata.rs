@@ -44,6 +44,8 @@ pub struct TokenMetadata {
 #[borsh(crate = "near_sdk::borsh")]
 pub struct Token {
     pub owner_id: AccountId,
+    pub approved_account_ids: HashMap<AccountId, u32>,
+    pub next_approval_id: u32,
 }
 
 //The Json token is what will be returned from view calls.
@@ -53,6 +55,7 @@ pub struct JsonToken {
     pub token_id: TokenId,
     pub owner_id: AccountId,
     pub metadata: TokenMetadata,
+    pub approved_account_id: HashMap<AccountId, u32>,
 }
 
 pub trait NonFungibleTokenMetadata {
