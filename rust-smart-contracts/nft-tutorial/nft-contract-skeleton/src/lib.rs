@@ -10,6 +10,7 @@ use near_sdk::{
 use std::collections::HashMap;
 
 pub use crate::approval::*;
+pub use crate::internal::*;
 pub use crate::metadata::*;
 pub use crate::mint::*;
 pub use crate::nft_core::*;
@@ -85,6 +86,18 @@ impl Contract {
     */
     #[init]
     pub fn new(owner_id: AccountId, metadata: NFTContractMetadata) -> Self {
+        Self {
+            tokens_per_owner: LookupMap::new(StorageKey::TokensPerOwner),
+            tokens_by_id: LookupMap::new(StorageKey::TokensById),
+            token_metadata_by_id: UnorderedMap::new(StorageKey::TokenMetadataById),
+            owner_id,
+            metadata: LazyOption::new(StorageKey::NFTContractMetadata, Some(&metadata)),
+        }
+    }
+
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate(owner_id: AccountId, metadata: NFTContractMetadata) -> Self {
         Self {
             tokens_per_owner: LookupMap::new(StorageKey::TokensPerOwner),
             tokens_by_id: LookupMap::new(StorageKey::TokensById),

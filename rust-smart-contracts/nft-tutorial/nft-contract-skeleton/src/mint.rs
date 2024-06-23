@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{internal::refund_deposit, *};
 
 #[near_bindgen]
 impl Contract {
