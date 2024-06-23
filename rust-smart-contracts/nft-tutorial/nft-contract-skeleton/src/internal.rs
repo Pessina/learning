@@ -60,6 +60,14 @@ pub(crate) fn refund_approved_account_ids(
     refund_approved_account_ids_iter(account_id, approved_account_ids.keys())
 }
 
+pub(crate) fn royalty_to_payout(royalty_percentage: u128, amount_to_pay: u128) -> U128 {
+    U128(
+        amount_to_pay
+            .saturating_mul(royalty_percentage)
+            .saturating_div(10000),
+    )
+}
+
 impl Contract {
     pub(crate) fn internal_add_token_to_owner(
         &mut self,
@@ -136,6 +144,7 @@ impl Contract {
             owner_id: receiver_id.clone(),
             approved_account_ids: Default::default(),
             next_approval_id: token.next_approval_id,
+            royalty: token.royalty.clone(),
         };
 
         self.tokens_by_id.insert(&token_id, &new_token);
