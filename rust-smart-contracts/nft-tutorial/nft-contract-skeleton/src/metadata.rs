@@ -43,18 +43,16 @@ pub struct TokenMetadata {
 #[derive(BorshDeserialize, BorshSerialize)]
 #[borsh(crate = "near_sdk::borsh")]
 pub struct Token {
-    /*
-        FILL THIS IN
-    */
+    pub owner_id: AccountId,
 }
 
 //The Json token is what will be returned from view calls.
 #[derive(Serialize, Deserialize, NearSchema)]
 #[serde(crate = "near_sdk::serde")]
 pub struct JsonToken {
-    /*
-        FILL THIS IN
-    */
+    pub token_id: TokenId,
+    pub owner_id: AccountId,
+    pub metadata: TokenMetadata,
 }
 
 pub trait NonFungibleTokenMetadata {
@@ -65,9 +63,6 @@ pub trait NonFungibleTokenMetadata {
 #[near_bindgen]
 impl NonFungibleTokenMetadata for Contract {
     fn nft_metadata(&self) -> NFTContractMetadata {
-        /*
-            FILL THIS IN
-        */
-        todo!(); //remove once code is filled in.
+        self.metadata.get().unwrap()
     }
 }

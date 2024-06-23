@@ -2,6 +2,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::IntoStorageKey;
 use near_sdk::{
     env, near_bindgen, AccountId, BorshStorageKey, CryptoHash, NearSchema, NearToken,
     PanicOnDefault, Promise, PromiseOrValue,
@@ -16,6 +17,7 @@ pub use crate::royalty::*;
 
 mod approval;
 mod enumeration;
+mod internal;
 mod metadata;
 mod mint;
 mod nft_core;
@@ -46,6 +48,13 @@ pub enum StorageKey {
     TokenTypesLocked,
 }
 
+impl IntoStorageKey for StorageKey {
+    fn into_storage_key(self) -> Vec<u8> {
+        let bytes = borsh::to_vec(&self).unwrap();
+        bytes
+    }
+}
+
 #[near_bindgen]
 impl Contract {
     /*
@@ -61,6 +70,7 @@ impl Contract {
                 spec: "nft-1.0.0".to_string(),
                 name: "NFT Tutorial Contract".to_string(),
                 symbol: "GOTEAM".to_string(),
+                icon: None,
                 base_uri: None,
                 reference: None,
                 reference_hash: None,
@@ -76,11 +86,11 @@ impl Contract {
     #[init]
     pub fn new(owner_id: AccountId, metadata: NFTContractMetadata) -> Self {
         Self {
-            tokens_per_owner: LookupMap::new(b"o"),
-            tokens_by_id: LookupMap::new(b"i"),
-            token_metadata_by_id: UnorderedMap::new(b"m"),
+            tokens_per_owner: LookupMap::new(StorageKey::TokensPerOwner),
+            tokens_by_id: LookupMap::new(StorageKey::TokensById),
+            token_metadata_by_id: UnorderedMap::new(StorageKey::TokenMetadataById),
             owner_id,
-            metadata: LazyOption::new(b"n", Some(&metadata)),
+            metadata: LazyOption::new(StorageKey::NFTContractMetadata, Some(&metadata)),
         }
     }
 }
