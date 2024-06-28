@@ -3,7 +3,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Constants
 const CONTRACT_ADDRESS = "0x2fa5f72e70771ec5b238b4E4EAFfd6F21bF6adf5";
 
 async function connectToProvider(): Promise<ethers.JsonRpcProvider> {
@@ -56,12 +55,12 @@ async function callContractWithDataField(
   functionSignature: string,
   params: string[]
 ): Promise<void> {
-  const functionSelector = ethers.id(functionSignature).slice(0, 10);
-  const encodedParams = ethers.AbiCoder.defaultAbiCoder().encode(
-    params.map(() => "string"),
+  const iface = new ethers.Interface([`function ${functionSignature}`]);
+
+  const data = iface.encodeFunctionData(
+    functionSignature.split("(")[0],
     params
   );
-  const data = functionSelector + encodedParams.slice(2);
 
   try {
     const tx = await signer.sendTransaction({
@@ -82,24 +81,25 @@ function decodeData(
   data: string,
   functionSignature: string
 ): { functionName: string; parameters: any[] } {
-  const functionSelector = data.slice(0, 10);
-  const encodedParams = "0x" + data.slice(10);
+  const abi = [`function ${functionSignature}`];
 
-  // Extract function name from signature
-  const functionName = functionSignature.split("(")[0];
+  const iface = new ethers.Interface(abi);
 
-  // Parse parameter types from signature
-  const paramTypes = functionSignature.match(/\((.*?)\)/)?.[1].split(",") || [];
+  const func = iface.getFunction(functionSignature.split("(")[0]);
 
-  // Decode parameters
-  const decodedParams = ethers.AbiCoder.defaultAbiCoder().decode(
-    paramTypes,
-    encodedParams
-  );
+  if (!func) {
+    throw new Error("Invalid function signature");
+  }
+
+  const decodedData = iface.parseTransaction({ data });
+
+  if (!decodedData) {
+    throw new Error("Failed to decode data");
+  }
 
   return {
-    functionName,
-    parameters: decodedParams,
+    functionName: func.name,
+    parameters: decodedData.args,
   };
 }
 
@@ -108,28 +108,27 @@ async function viewCallerDataWithDataField(
   key: string
 ): Promise<void> {
   const functionSignature = "viewCallerData(string)";
-  const functionSelector = ethers.id(functionSignature).slice(0, 10);
-  const encodedKey = ethers.AbiCoder.defaultAbiCoder().encode(
-    ["string"],
-    [key]
-  );
-  const data = functionSelector + encodedKey.slice(2);
+
+  const iface = new ethers.Interface([`function ${functionSignature}`]);
+
+  const data = iface.encodeFunctionData("viewCallerData", [key]);
 
   const decodedData = decodeData(data, functionSignature);
   console.log("Decoded Data:");
   console.log("Function:", decodedData.functionName);
-  console.log("Parameters:", decodedData.parameters[0]);
+  console.log("Parameters:", decodedData.parameters);
 
   try {
     const result = await provider.call({
       to: CONTRACT_ADDRESS,
       data: data,
     });
-    const [value] = ethers.AbiCoder.defaultAbiCoder().decode(
+
+    const decodedResult = ethers.AbiCoder.defaultAbiCoder().decode(
       ["string"],
       result
     );
-    console.log(`Caller data for key "${key}": ${value}`);
+    console.log(`Caller data for key "${key}": ${decodedResult[0]}`);
   } catch (error) {
     console.error("Error viewing caller data using data field:", error);
   }
@@ -140,13 +139,12 @@ async function interactWithCallerRegistry(): Promise<void> {
   const contract = await createContractInstance(provider);
   const signer = new ethers.Wallet(process.env.PRIVATE_KEY as string, provider);
 
-  const key = "12312312321";
-  const value = "11111";
+  const key = "felipe";
+  const value = "friday 28";
 
   // await viewCallerData(contract, key);
   // await setCallerData(contract, signer, key, value);
 
-  // Using data field
   await callContractWithDataField(signer, "setCallerData(string,string)", [
     key,
     value,
