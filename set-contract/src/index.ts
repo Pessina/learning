@@ -78,6 +78,31 @@ async function callContractWithDataField(
   }
 }
 
+function decodeData(
+  data: string,
+  functionSignature: string
+): { functionName: string; parameters: any[] } {
+  const functionSelector = data.slice(0, 10);
+  const encodedParams = "0x" + data.slice(10);
+
+  // Extract function name from signature
+  const functionName = functionSignature.split("(")[0];
+
+  // Parse parameter types from signature
+  const paramTypes = functionSignature.match(/\((.*?)\)/)?.[1].split(",") || [];
+
+  // Decode parameters
+  const decodedParams = ethers.AbiCoder.defaultAbiCoder().decode(
+    paramTypes,
+    encodedParams
+  );
+
+  return {
+    functionName,
+    parameters: decodedParams,
+  };
+}
+
 async function viewCallerDataWithDataField(
   provider: ethers.JsonRpcProvider,
   key: string
@@ -89,6 +114,11 @@ async function viewCallerDataWithDataField(
     [key]
   );
   const data = functionSelector + encodedKey.slice(2);
+
+  const decodedData = decodeData(data, functionSignature);
+  console.log("Decoded Data:");
+  console.log("Function:", decodedData.functionName);
+  console.log("Parameters:", decodedData.parameters[0]);
 
   try {
     const result = await provider.call({
@@ -110,16 +140,16 @@ async function interactWithCallerRegistry(): Promise<void> {
   const contract = await createContractInstance(provider);
   const signer = new ethers.Wallet(process.env.PRIVATE_KEY as string, provider);
 
-  const key = "exampleKey";
-  const value = "exampleValue";
+  const key = "12312312321";
+  const value = "11111";
 
-  await viewCallerData(contract, key);
-  await setCallerData(contract, signer, key, value);
+  // await viewCallerData(contract, key);
+  // await setCallerData(contract, signer, key, value);
 
   // Using data field
   await callContractWithDataField(signer, "setCallerData(string,string)", [
     key,
-    "newValue",
+    value,
   ]);
   await viewCallerDataWithDataField(provider, key);
 }
