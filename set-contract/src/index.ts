@@ -4,8 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // Constants
-const CONTRACT_ADDRESS = "0xA131f5E638013686B409A71356d8551Db4f3AE05";
-const CALLER_ADDRESS = "0x4174678c78fEaFd778c1ff319D5D326701449b25";
+const CONTRACT_ADDRESS = "0x2fa5f72e70771ec5b238b4E4EAFfd6F21bF6adf5";
 
 async function connectToProvider(): Promise<ethers.JsonRpcProvider> {
   return new ethers.JsonRpcProvider(
@@ -17,48 +16,49 @@ async function createContractInstance(
   provider: ethers.JsonRpcProvider
 ): Promise<ethers.Contract> {
   const minimalABI = [
-    "function viewCallerStatus(address) view returns (bool)",
-    "function setCallerStatus(bool)",
+    "function viewCallerData(string) view returns (string)",
+    "function setCallerData(string, string)",
   ];
   return new ethers.Contract(CONTRACT_ADDRESS, minimalABI, provider);
 }
 
-async function viewCallerStatus(
+async function viewCallerData(
   contract: ethers.Contract,
-  callerAddress: string
+  key: string
 ): Promise<void> {
   try {
-    const status = await contract.viewCallerStatus(callerAddress);
-    console.log(`Caller status for ${callerAddress}: ${status}`);
+    const value = await contract.viewCallerData(key);
+    console.log(`Caller data for key "${key}": ${value}`);
   } catch (error) {
-    console.error("Error viewing caller status:", error);
+    console.error("Error viewing caller data:", error);
   }
 }
 
-async function setCallerStatus(
+async function setCallerData(
   contract: ethers.Contract,
   signer: ethers.Wallet,
-  status: boolean
+  key: string,
+  value: string
 ): Promise<void> {
   try {
     const tx = await (
       contract.connect(signer) as ethers.Contract
-    ).setCallerStatus(status);
+    ).setCallerData(key, value);
     await tx.wait();
-    console.log("Caller status set successfully");
+    console.log("Caller data set successfully");
   } catch (error) {
-    console.error("Error setting caller status:", error);
+    console.error("Error setting caller data:", error);
   }
 }
 
 async function callContractWithDataField(
   signer: ethers.Wallet,
   functionSignature: string,
-  params: any[]
+  params: string[]
 ): Promise<void> {
   const functionSelector = ethers.id(functionSignature).slice(0, 10);
   const encodedParams = ethers.AbiCoder.defaultAbiCoder().encode(
-    params.map(() => "bool"),
+    params.map(() => "string"),
     params
   );
   const data = functionSelector + encodedParams.slice(2);
@@ -78,30 +78,30 @@ async function callContractWithDataField(
   }
 }
 
-async function viewCallerStatusWithDataField(
+async function viewCallerDataWithDataField(
   provider: ethers.JsonRpcProvider,
-  callerAddress: string
+  key: string
 ): Promise<void> {
-  const functionSignature = "viewCallerStatus(address)";
+  const functionSignature = "viewCallerData(string)";
   const functionSelector = ethers.id(functionSignature).slice(0, 10);
-  const encodedAddress = ethers.AbiCoder.defaultAbiCoder().encode(
-    ["address"],
-    [callerAddress]
+  const encodedKey = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["string"],
+    [key]
   );
-  const data = functionSelector + encodedAddress.slice(2);
+  const data = functionSelector + encodedKey.slice(2);
 
   try {
     const result = await provider.call({
       to: CONTRACT_ADDRESS,
       data: data,
     });
-    const [callerStatus] = ethers.AbiCoder.defaultAbiCoder().decode(
-      ["bool"],
+    const [value] = ethers.AbiCoder.defaultAbiCoder().decode(
+      ["string"],
       result
     );
-    console.log(`Caller status for ${callerAddress}: ${callerStatus}`);
+    console.log(`Caller data for key "${key}": ${value}`);
   } catch (error) {
-    console.error("Error viewing caller status using data field:", error);
+    console.error("Error viewing caller data using data field:", error);
   }
 }
 
@@ -110,12 +110,18 @@ async function interactWithCallerRegistry(): Promise<void> {
   const contract = await createContractInstance(provider);
   const signer = new ethers.Wallet(process.env.PRIVATE_KEY as string, provider);
 
-  await viewCallerStatus(contract, CALLER_ADDRESS);
-  await setCallerStatus(contract, signer, true);
+  const key = "exampleKey";
+  const value = "exampleValue";
+
+  await viewCallerData(contract, key);
+  await setCallerData(contract, signer, key, value);
 
   // Using data field
-  await callContractWithDataField(signer, "setCallerStatus(bool)", [false]);
-  await viewCallerStatusWithDataField(provider, CALLER_ADDRESS);
+  await callContractWithDataField(signer, "setCallerData(string,string)", [
+    key,
+    "newValue",
+  ]);
+  await viewCallerDataWithDataField(provider, key);
 }
 
 interactWithCallerRegistry();
