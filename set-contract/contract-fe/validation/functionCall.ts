@@ -43,7 +43,7 @@ export function getUserFriendlyDescription(tx: {
   }
 
   if (tx.to === null || tx.to === undefined || tx.to === "") {
-    return "ALERT: You are deploying a new contract. Please verify the contract code carefully.";
+    return "You are deploying a new contract. Please verify the contract code carefully.";
   }
 
   const interfaces = [
@@ -59,21 +59,21 @@ export function getUserFriendlyDescription(tx: {
       if (decoded) {
         switch (`${name}:${decoded.name}`) {
           case "ERC20:transfer":
-            return `HIGH RISK: You are transferring ${ethers.formatUnits(
+            return `You are transferring ${ethers.formatUnits(
               decoded.args[1],
               18
             )} tokens to ${
               decoded.args[0]
             }. If the recipient address is incorrect, your tokens could be lost.`;
           case "ERC20:approve":
-            return `HIGH RISK: You are approving ${
+            return `You are approving ${
               decoded.args[0]
             } to spend ${ethers.formatUnits(
               decoded.args[1],
               18
             )} of your tokens. If this address is compromised or malicious, they can transfer your tokens without further consent.`;
           case "ERC20:transferFrom":
-            return `HIGH RISK: You are allowing the transfer of ${ethers.formatUnits(
+            return `You are allowing the transfer of ${ethers.formatUnits(
               decoded.args[2],
               18
             )} tokens from ${decoded.args[0]} to ${
@@ -81,67 +81,63 @@ export function getUserFriendlyDescription(tx: {
             }. Ensure you trust the contract initiating this transfer.`;
           case "ERC721:safeTransferFrom":
             if (decoded.args.length === 3) {
-              return `HIGH RISK: You are safely transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your NFT could be permanently lost.`;
+              return `You are safely transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your NFT could be permanently lost.`;
             } else {
-              return `HIGH RISK: You are safely transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]} with additional data. If the recipient address is incorrect, your NFT could be permanently lost.`;
+              return `You are safely transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]} with additional data. If the recipient address is incorrect, your NFT could be permanently lost.`;
             }
           case "ERC721:transferFrom":
-            return `HIGH RISK: You are transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your NFT could be permanently lost.`;
+            return `You are transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your NFT could be permanently lost.`;
           case "ERC721:approve":
-            return `MODERATE RISK: You are approving ${decoded.args[0]} to transfer your NFT #${decoded.args[1]}. This address will be able to transfer this specific NFT on your behalf.`;
+            return `You are approving ${decoded.args[0]} to transfer your NFT #${decoded.args[1]}. This address will be able to transfer this specific NFT on your behalf.`;
           case "ERC721:setApprovalForAll":
-            return `HIGH RISK: You are ${
-              decoded.args[1] ? "approving" : "revoking"
-            } ${
+            return `You are ${decoded.args[1] ? "approving" : "revoking"} ${
               decoded.args[0]
             } to manage ALL your NFTs. If approved, this address will have full control over all your NFTs in this collection.`;
           case "ERC1155:safeTransferFrom":
-            return `HIGH RISK: You are transferring ${decoded.args[3]} of token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your tokens could be permanently lost.`;
+            return `You are transferring ${decoded.args[3]} of token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your tokens could be permanently lost.`;
           case "ERC1155:safeBatchTransferFrom":
-            return `HIGH RISK: You are batch transferring multiple token IDs from ${decoded.args[0]} to ${decoded.args[1]}. This operation affects multiple assets simultaneously.`;
+            return `You are batch transferring multiple token IDs from ${decoded.args[0]} to ${decoded.args[1]}. This operation affects multiple assets simultaneously.`;
           case "ERC1155:setApprovalForAll":
-            return `HIGH RISK: You are ${
-              decoded.args[1] ? "approving" : "revoking"
-            } ${
+            return `You are ${decoded.args[1] ? "approving" : "revoking"} ${
               decoded.args[0]
             } to manage ALL your tokens. If approved, this address will have full control over all your tokens in this collection.`;
           case "ERC777:send":
-            return `HIGH RISK: You are sending ${ethers.formatUnits(
+            return `You are sending ${ethers.formatUnits(
               decoded.args[1],
               18
             )} tokens to ${
               decoded.args[0]
             }. If the recipient address is incorrect, your tokens could be lost.`;
           case "ERC777:burn":
-            return `HIGH RISK: You are burning ${ethers.formatUnits(
+            return `You are burning ${ethers.formatUnits(
               decoded.args[0],
               18
             )} tokens. This operation is irreversible and will permanently remove these tokens from circulation.`;
           case "ERC777:authorizeOperator":
-            return `HIGH RISK: You are authorizing ${decoded.args[0]} as an operator for your tokens. This address will be able to transfer and burn your tokens on your behalf.`;
+            return `You are authorizing ${decoded.args[0]} as an operator for your tokens. This address will be able to transfer and burn your tokens on your behalf.`;
           case "ERC777:revokeOperator":
-            return `MODERATE RISK: You are revoking ${decoded.args[0]} as an operator for your tokens. This may impact any automated operations you have set up with this operator.`;
+            return `You are revoking ${decoded.args[0]} as an operator for your tokens. This may impact any automated operations you have set up with this operator.`;
           case "ERC777:operatorSend":
-            return `HIGH RISK: An operator is sending ${ethers.formatUnits(
+            return `An operator is sending ${ethers.formatUnits(
               decoded.args[2],
               18
             )} tokens from ${decoded.args[0]} to ${
               decoded.args[1]
             }. Ensure you trust this operator and the transaction details.`;
           case "ERC777:operatorBurn":
-            return `HIGH RISK: An operator is burning ${ethers.formatUnits(
+            return `An operator is burning ${ethers.formatUnits(
               decoded.args[1],
               18
             )} tokens from ${
               decoded.args[0]
             }. This operation is irreversible and will permanently remove these tokens from circulation.`;
           default:
-            return `CAUTION: You are interacting with a ${name} contract. Verify all details carefully.`;
+            return `You are interacting with a ${name} contract. Verify all details carefully.`;
         }
       }
     } catch (error) {
       // If parsing fails, continue to the next interface
-      console.log(error);
+      console.error(`Error parsing ${name} interface:`, error);
     }
   }
 
