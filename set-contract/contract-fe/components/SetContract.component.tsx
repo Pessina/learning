@@ -19,10 +19,7 @@ export const SetContractComponent = () => {
       );
       const contract = new CallerRegistryContract(provider);
 
-      await contract.callContractWithDataField("setCallerData(string,string)", [
-        key,
-        value,
-      ]);
+      await contract.callContractWithDataField(key, value);
 
       setResult("Interaction successful. Check console for details.");
     } catch (error: any) {
@@ -42,7 +39,7 @@ export const SetContractComponent = () => {
       );
 
       const contract = new CallerRegistryContract(provider);
-      await contract.viewCallerData(key);
+      await contract.viewCallerDataWithDataField(key);
       setResult("View operation successful. Check console for details.");
     } catch (error: any) {
       setResult(`Error: ${error.message}`);

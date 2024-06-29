@@ -22,17 +22,13 @@ class CallerRegistryContract {
     );
   }
 
-  async callContractWithDataField(
-    functionSignature: string,
-    params: string[]
-  ): Promise<void> {
+  async callContractWithDataField(key: string, value: string): Promise<void> {
     const signer = await this.provider.getSigner();
-    const iface = new ethers.Interface([`function ${functionSignature}`]);
+    const iface = new ethers.Interface([
+      `function setCallerData(string,string)`,
+    ]);
 
-    const data = iface.encodeFunctionData(
-      functionSignature.split("(")[0],
-      params
-    );
+    const data = iface.encodeFunctionData("setCallerData", [key, value]);
 
     try {
       const tx = await signer.sendTransaction({
@@ -40,12 +36,9 @@ class CallerRegistryContract {
         data: data,
       });
       await tx.wait();
-      console.log(`${functionSignature} called successfully using data field`);
+      console.log(`setCallerData called successfully using data field`);
     } catch (error) {
-      console.error(
-        `Error calling ${functionSignature} using data field:`,
-        error
-      );
+      console.error(`Error calling setCallerData using data field:`, error);
     }
   }
 
@@ -70,17 +63,6 @@ class CallerRegistryContract {
     } catch (error) {
       console.error("Error viewing caller data using data field:", error);
     }
-  }
-
-  async setCallerData(key: string, value: string): Promise<void> {
-    await this.callContractWithDataField("setCallerData(string,string)", [
-      key,
-      value,
-    ]);
-  }
-
-  async viewCallerData(key: string): Promise<void> {
-    await this.viewCallerDataWithDataField(key);
   }
 }
 
