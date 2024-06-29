@@ -6,13 +6,17 @@ import { BoredApeContractComponent } from "../components/BoredApeContract.compon
 
 export default function Home() {
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">
-        Smart Contract Interaction
-      </h1>
-      <SetContractComponent />
-      <USDTContractComponent />
-      <BoredApeContractComponent />
+    <div className="min-h-screen bg-gradient-to-r from-blue-100 to-purple-100">
+      <div className="container mx-auto p-8">
+        <h1 className="text-4xl font-bold mb-8 text-center text-gray-800 border-b-2 border-gray-300 pb-4">
+          Smart Contract Interaction
+        </h1>
+        <div className="flex flex-col gap-4">
+          <SetContractComponent />
+          <USDTContractComponent />
+          <BoredApeContractComponent />
+        </div>
+      </div>
     </div>
   );
 }
