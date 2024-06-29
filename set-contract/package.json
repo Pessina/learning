@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "contract:call": "ts-node src/index.ts"
+    "test": "echo test"
   },
   "keywords": [],
   "author": "",
