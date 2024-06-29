@@ -2,12 +2,7 @@
 
 import { useState } from "react";
 import { ethers } from "ethers";
-import {
-  connectToProvider,
-  createContractInstance,
-  callContractWithDataField,
-  viewCallerDataWithDataField,
-} from "../utils/contract";
+import { CallerRegistryContract } from "../utils/SetContract";
 
 export default function Home() {
   const [key, setKey] = useState("");
@@ -25,8 +20,9 @@ export default function Home() {
         window.ethereum as ethers.Eip1193Provider
       );
       const signer = await provider.getSigner();
+      const contract = new CallerRegistryContract(provider);
 
-      await callContractWithDataField(signer, "setCallerData(string,string)", [
+      await contract.callContractWithDataField("setCallerData(string,string)", [
         key,
         value,
       ]);
@@ -47,7 +43,9 @@ export default function Home() {
       const provider = new ethers.BrowserProvider(
         window.ethereum as ethers.Eip1193Provider
       );
-      await viewCallerDataWithDataField(provider, key);
+
+      const contract = new CallerRegistryContract(provider);
+      await contract.viewCallerData(key);
       setResult("View operation successful. Check console for details.");
     } catch (error: any) {
       setResult(`Error: ${error.message}`);
