@@ -45,6 +45,25 @@ export const USDTContractComponent = () => {
     }
   };
 
+  const handleMint = async () => {
+    try {
+      if (typeof window.ethereum === "undefined") {
+        throw new Error("MetaMask is not installed");
+      }
+
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const provider = new ethers.BrowserProvider(
+        window.ethereum as ethers.Eip1193Provider
+      );
+      const contract = new USDTContract(provider);
+
+      await contract.mint(address, amount);
+      setResult(`Successfully minted ${amount} USDT to ${address}`);
+    } catch (error: any) {
+      setResult(`Error: ${error.message}`);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 bg-gray-100">
       <h1 className="text-2xl font-bold mb-4 text-gray-800">
@@ -73,9 +92,15 @@ export const USDTContractComponent = () => {
         </button>
         <button
           onClick={handleTransfer}
-          className="bg-green-600 text-white p-2 rounded hover:bg-green-700"
+          className="bg-green-600 text-white p-2 rounded hover:bg-green-700 mr-2"
         >
           Transfer
+        </button>
+        <button
+          onClick={handleMint}
+          className="bg-purple-600 text-white p-2 rounded hover:bg-purple-700"
+        >
+          Mint
         </button>
       </div>
       {result && (

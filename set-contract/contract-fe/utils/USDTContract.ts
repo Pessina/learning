@@ -9,11 +9,9 @@ class USDTContract {
   constructor(provider: ethers.BrowserProvider) {
     this.provider = provider;
     const minimalABI = [
-      "function balanceOf(address) view returns (uint256)",
-      "function transfer(address, uint256) returns (bool)",
-      "function approve(address, uint256) returns (bool)",
-      "function allowance(address, address) view returns (uint256)",
-      "function totalSupply() view returns (uint256)",
+      "function balanceOf(address account) view returns (uint256)",
+      "function transfer(address to, uint256 amount) returns (bool)",
+      "function _mint(address receiver, uint256 amount) returns (bool)",
       "event Transfer(address indexed from, address indexed to, uint256 value)",
       "event Approval(address indexed owner, address indexed spender, uint256 value)",
     ];
@@ -34,7 +32,7 @@ class USDTContract {
     }
   }
 
-  async transfer(to: string, amount: string): Promise<void> {
+  async transfer(to: string, amount: string): Promise<boolean> {
     try {
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 6);
@@ -43,43 +41,26 @@ class USDTContract {
       ).transfer(to, amountWei);
       await tx.wait();
       console.log("Transfer successful");
+      return true;
     } catch (error) {
       console.error("Error transferring USDT:", error);
       throw error;
     }
   }
 
-  async approve(spender: string, amount: string): Promise<void> {
+  async mint(receiver: string, amount: string): Promise<boolean> {
     try {
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 6);
-      const tx = await (
-        this.contract.connect(signer) as ethers.Contract
-      ).approve(spender, amountWei);
+      const tx = await (this.contract.connect(signer) as ethers.Contract)._mint(
+        receiver,
+        amountWei
+      );
       await tx.wait();
-      console.log("Approval successful");
+      console.log(`Successfully minted ${amount} USDT to ${receiver}`);
+      return true;
     } catch (error) {
-      console.error("Error approving USDT:", error);
-      throw error;
-    }
-  }
-
-  async getAllowance(owner: string, spender: string): Promise<string> {
-    try {
-      const allowance = await this.contract.allowance(owner, spender);
-      return ethers.formatUnits(allowance, 6);
-    } catch (error) {
-      console.error("Error getting allowance:", error);
-      throw error;
-    }
-  }
-
-  async getTotalSupply(): Promise<string> {
-    try {
-      const totalSupply = await this.contract.totalSupply();
-      return ethers.formatUnits(totalSupply, 6);
-    } catch (error) {
-      console.error("Error getting total supply:", error);
+      console.error("Error minting USDT:", error);
       throw error;
     }
   }
