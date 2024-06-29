@@ -36,9 +36,9 @@ const erc777Interface = new ethers.Interface([
 export function getUserFriendlyDescription(tx: {
   data: string;
   to: string;
-  value: string;
+  value?: string;
 }): string {
-  if (tx.data === "0x") {
+  if (tx.data === "0x" && tx.value) {
     return `You are sending ${ethers.formatEther(tx.value)} ETH to ${tx.to}`;
   }
 
@@ -61,7 +61,7 @@ export function getUserFriendlyDescription(tx: {
           case "ERC20:transfer":
             return `You are transferring ${ethers.formatUnits(
               decoded.args[1],
-              18
+              6
             )} tokens to ${
               decoded.args[0]
             }. If the recipient address is incorrect, your tokens could be lost.`;
@@ -70,12 +70,12 @@ export function getUserFriendlyDescription(tx: {
               decoded.args[0]
             } to spend ${ethers.formatUnits(
               decoded.args[1],
-              18
+              6
             )} of your tokens. If this address is compromised or malicious, they can transfer your tokens without further consent.`;
           case "ERC20:transferFrom":
             return `You are allowing the transfer of ${ethers.formatUnits(
               decoded.args[2],
-              18
+              6
             )} tokens from ${decoded.args[0]} to ${
               decoded.args[1]
             }. Ensure you trust the contract initiating this transfer.`;

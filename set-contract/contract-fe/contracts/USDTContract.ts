@@ -1,3 +1,4 @@
+import { getUserFriendlyDescription } from "@/validation/functionCall";
 import { ethers } from "ethers";
 
 class USDTContract {
@@ -41,10 +42,14 @@ class USDTContract {
       ]);
       const data = iface.encodeFunctionData("transfer", [to, amountWei]);
 
-      const tx = await signer.sendTransaction({
+      const transaction = {
         to: USDTContract.CONTRACT_ADDRESS,
         data: data,
-      });
+      };
+
+      console.log(getUserFriendlyDescription(transaction));
+
+      const tx = await signer.sendTransaction(transaction);
       await tx.wait();
       console.log("Transfer successful");
       return true;
