@@ -23,6 +23,16 @@ const erc1155Interface = new ethers.Interface([
   "function setApprovalForAll(address operator, bool approved)",
 ]);
 
+// ERC777 Interface
+const erc777Interface = new ethers.Interface([
+  "function send(address recipient, uint256 amount, bytes data)",
+  "function burn(uint256 amount, bytes data)",
+  "function authorizeOperator(address operator)",
+  "function revokeOperator(address operator)",
+  "function operatorSend(address from, address to, uint256 amount, bytes data, bytes operatorData)",
+  "function operatorBurn(address from, uint256 amount, bytes data, bytes operatorData)",
+]);
+
 export function getUserFriendlyDescription(tx: {
   data: string;
   to: string;
@@ -40,6 +50,7 @@ export function getUserFriendlyDescription(tx: {
     { name: "ERC20", interface: erc20Interface },
     { name: "ERC721", interface: erc721Interface },
     { name: "ERC1155", interface: erc1155Interface },
+    { name: "ERC777", interface: erc777Interface },
   ];
 
   for (const { name, interface: iface } of interfaces) {
@@ -94,6 +105,36 @@ export function getUserFriendlyDescription(tx: {
             } ${
               decoded.args[0]
             } to manage ALL your tokens. If approved, this address will have full control over all your tokens in this collection.`;
+          case "ERC777:send":
+            return `HIGH RISK: You are sending ${ethers.formatUnits(
+              decoded.args[1],
+              18
+            )} tokens to ${
+              decoded.args[0]
+            }. If the recipient address is incorrect, your tokens could be lost.`;
+          case "ERC777:burn":
+            return `HIGH RISK: You are burning ${ethers.formatUnits(
+              decoded.args[0],
+              18
+            )} tokens. This operation is irreversible and will permanently remove these tokens from circulation.`;
+          case "ERC777:authorizeOperator":
+            return `HIGH RISK: You are authorizing ${decoded.args[0]} as an operator for your tokens. This address will be able to transfer and burn your tokens on your behalf.`;
+          case "ERC777:revokeOperator":
+            return `MODERATE RISK: You are revoking ${decoded.args[0]} as an operator for your tokens. This may impact any automated operations you have set up with this operator.`;
+          case "ERC777:operatorSend":
+            return `HIGH RISK: An operator is sending ${ethers.formatUnits(
+              decoded.args[2],
+              18
+            )} tokens from ${decoded.args[0]} to ${
+              decoded.args[1]
+            }. Ensure you trust this operator and the transaction details.`;
+          case "ERC777:operatorBurn":
+            return `HIGH RISK: An operator is burning ${ethers.formatUnits(
+              decoded.args[1],
+              18
+            )} tokens from ${
+              decoded.args[0]
+            }. This operation is irreversible and will permanently remove these tokens from circulation.`;
           default:
             return `CAUTION: You are interacting with a ${name} contract. Verify all details carefully.`;
         }
