@@ -1,8 +1,8 @@
 import { ethers } from "ethers";
 
-class BoredApeYachtClubContract {
+class NFTContract {
   private static CONTRACT_ADDRESS =
-    "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D"; // BAYC contract address
+    "0xb2e8760AcA2b7E6ab375DD3a4F25fa603870ecE4"; // BAYC contract address
   private provider: ethers.BrowserProvider;
   private contract: ethers.Contract;
 
@@ -15,7 +15,7 @@ class BoredApeYachtClubContract {
       "function transferFrom(address from, address to, uint256 tokenId)",
     ];
     this.contract = new ethers.Contract(
-      BoredApeYachtClubContract.CONTRACT_ADDRESS,
+      NFTContract.CONTRACT_ADDRESS,
       minimalABI,
       provider
     );
@@ -64,4 +64,4 @@ class BoredApeYachtClubContract {
   }
 }
 
-export { BoredApeYachtClubContract };
+export { NFTContract };

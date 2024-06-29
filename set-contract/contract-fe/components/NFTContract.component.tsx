@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { ethers } from "ethers";
-import { BoredApeYachtClubContract } from "../contracts/BoredApeContract";
+import { NFTContract } from "../contracts/NFTContract";
 
-export const BoredApeContractComponent = () => {
+export const NFTContractComponent = () => {
   const [address, setAddress] = useState("");
   const [tokenId, setTokenId] = useState("");
   const [result, setResult] = useState("");
@@ -17,7 +17,7 @@ export const BoredApeContractComponent = () => {
       const provider = new ethers.BrowserProvider(
         window.ethereum as ethers.Eip1193Provider
       );
-      const contract = new BoredApeYachtClubContract(provider);
+      const contract = new NFTContract(provider);
 
       const balance = await contract.balanceOf(address);
       setResult(`Balance: ${balance} BAYC tokens`);
@@ -36,7 +36,7 @@ export const BoredApeContractComponent = () => {
       const provider = new ethers.BrowserProvider(
         window.ethereum as ethers.Eip1193Provider
       );
-      const contract = new BoredApeYachtClubContract(provider);
+      const contract = new NFTContract(provider);
 
       const owner = await contract.ownerOf(Number(tokenId));
       setResult(`Owner of token ${tokenId}: ${owner}`);
@@ -55,7 +55,7 @@ export const BoredApeContractComponent = () => {
       const provider = new ethers.BrowserProvider(
         window.ethereum as ethers.Eip1193Provider
       );
-      const contract = new BoredApeYachtClubContract(provider);
+      const contract = new NFTContract(provider);
 
       const tokenURI = await contract.tokenURI(Number(tokenId));
       setResult(`Token URI for ${tokenId}: ${tokenURI}`);
@@ -67,7 +67,7 @@ export const BoredApeContractComponent = () => {
   return (
     <div className="container mx-auto p-4 bg-gray-100">
       <h1 className="text-2xl font-bold mb-4 text-gray-800">
-        Bored Ape Yacht Club Contract Interaction
+        NFT Contract Interaction
       </h1>
       <div className="mb-4">
         <input

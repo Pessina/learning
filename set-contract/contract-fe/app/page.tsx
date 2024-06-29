@@ -1,8 +1,8 @@
 "use client";
 
 import { SetContractComponent } from "../components/SetContract.component";
-import { USDTContractComponent } from "../components/USDTContract.component";
-import { BoredApeContractComponent } from "../components/BoredApeContract.component";
+import { FTContractComponent } from "../components/FTContract.component";
+import { NFTContractComponent } from "../components/NFTContract.component";
 
 export default function Home() {
   return (
@@ -13,8 +13,8 @@ export default function Home() {
         </h1>
         <div className="flex flex-col gap-4">
           <SetContractComponent />
-          <USDTContractComponent />
-          <BoredApeContractComponent />
+          <FTContractComponent />
+          <NFTContractComponent />
         </div>
       </div>
     </div>

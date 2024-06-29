@@ -23,16 +23,6 @@ const erc1155Interface = new ethers.Interface([
   "function setApprovalForAll(address, bool)",
 ]);
 
-// ERC777 Interface
-const erc777Interface = new ethers.Interface([
-  "function authorizeOperator(address)",
-  "function revokeOperator(address)",
-  "function send(address,uint256,bytes)",
-  "function operatorSend(address,address,uint256,bytes,bytes)",
-  "function burn(uint256,bytes)",
-  "function operatorBurn(address,uint256,bytes,bytes)",
-]);
-
 export function getUserFriendlyDescription(tx: {
   data: string;
   to: string;
@@ -50,7 +40,6 @@ export function getUserFriendlyDescription(tx: {
     { name: "ERC20", interface: erc20Interface },
     { name: "ERC721", interface: erc721Interface },
     { name: "ERC1155", interface: erc1155Interface },
-    { name: "ERC777", interface: erc777Interface },
   ];
 
   for (const { name, interface: iface } of interfaces) {
@@ -80,11 +69,6 @@ export function getUserFriendlyDescription(tx: {
               decoded.args[1]
             }. Ensure you trust the contract initiating this transfer.`;
           case "ERC721:safeTransferFrom":
-            if (decoded.args.length === 3) {
-              return `You are safely transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your NFT could be permanently lost.`;
-            } else {
-              return `You are safely transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]} with additional data. If the recipient address is incorrect, your NFT could be permanently lost.`;
-            }
           case "ERC721:transferFrom":
             return `You are transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your NFT could be permanently lost.`;
           case "ERC721:approve":
@@ -101,36 +85,6 @@ export function getUserFriendlyDescription(tx: {
             return `You are ${decoded.args[1] ? "approving" : "revoking"} ${
               decoded.args[0]
             } to manage ALL your tokens. If approved, this address will have full control over all your tokens in this collection.`;
-          case "ERC777:send":
-            return `You are sending ${ethers.formatUnits(
-              decoded.args[1],
-              18
-            )} tokens to ${
-              decoded.args[0]
-            }. If the recipient address is incorrect, your tokens could be lost.`;
-          case "ERC777:burn":
-            return `You are burning ${ethers.formatUnits(
-              decoded.args[0],
-              18
-            )} tokens. This operation is irreversible and will permanently remove these tokens from circulation.`;
-          case "ERC777:authorizeOperator":
-            return `You are authorizing ${decoded.args[0]} as an operator for your tokens. This address will be able to transfer and burn your tokens on your behalf.`;
-          case "ERC777:revokeOperator":
-            return `You are revoking ${decoded.args[0]} as an operator for your tokens. This may impact any automated operations you have set up with this operator.`;
-          case "ERC777:operatorSend":
-            return `An operator is sending ${ethers.formatUnits(
-              decoded.args[2],
-              18
-            )} tokens from ${decoded.args[0]} to ${
-              decoded.args[1]
-            }. Ensure you trust this operator and the transaction details.`;
-          case "ERC777:operatorBurn":
-            return `An operator is burning ${ethers.formatUnits(
-              decoded.args[1],
-              18
-            )} tokens from ${
-              decoded.args[0]
-            }. This operation is irreversible and will permanently remove these tokens from circulation.`;
           default:
             return `You are interacting with a ${name} contract. Verify all details carefully.`;
         }
