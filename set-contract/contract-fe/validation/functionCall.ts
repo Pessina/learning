@@ -2,35 +2,35 @@ import { ethers } from "ethers";
 
 // ERC20 Interface
 const erc20Interface = new ethers.Interface([
-  "function transfer(address to, uint256 amount)",
-  "function approve(address spender, uint256 amount)",
-  "function transferFrom(address sender, address recipient, uint256 amount)",
+  "function transfer(address, uint256) returns (bool)",
+  "function approve(address, uint256) returns (bool)",
+  "function transferFrom(address, address, uint256) returns (bool)",
 ]);
 
 // ERC721 Interface
 const erc721Interface = new ethers.Interface([
-  "function safeTransferFrom(address from, address to, uint256 tokenId)",
-  "function safeTransferFrom(address from, address to, uint256 tokenId, bytes data)",
-  "function transferFrom(address from, address to, uint256 tokenId)",
-  "function approve(address to, uint256 tokenId)",
-  "function setApprovalForAll(address operator, bool approved)",
+  "function safeTransferFrom(address, address, uint256, bytes) payable",
+  "function safeTransferFrom(address, address, uint256) payable",
+  "function transferFrom(address, address, uint256) payable",
+  "function approve(address, uint256) payable",
+  "function setApprovalForAll(address, bool)",
 ]);
 
 // ERC1155 Interface
 const erc1155Interface = new ethers.Interface([
-  "function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes data)",
-  "function safeBatchTransferFrom(address from, address to, uint256[] ids, uint256[] amounts, bytes data)",
-  "function setApprovalForAll(address operator, bool approved)",
+  "function safeTransferFrom(address, address, uint256, uint256, bytes)",
+  "function safeBatchTransferFrom(address, address, uint256[], uint256[], bytes)",
+  "function setApprovalForAll(address, bool)",
 ]);
 
 // ERC777 Interface
 const erc777Interface = new ethers.Interface([
-  "function send(address recipient, uint256 amount, bytes data)",
-  "function burn(uint256 amount, bytes data)",
-  "function authorizeOperator(address operator)",
-  "function revokeOperator(address operator)",
-  "function operatorSend(address from, address to, uint256 amount, bytes data, bytes operatorData)",
-  "function operatorBurn(address from, uint256 amount, bytes data, bytes operatorData)",
+  "function authorizeOperator(address)",
+  "function revokeOperator(address)",
+  "function send(address,uint256,bytes)",
+  "function operatorSend(address,address,uint256,bytes,bytes)",
+  "function burn(uint256,bytes)",
+  "function operatorBurn(address,uint256,bytes,bytes)",
 ]);
 
 export function getUserFriendlyDescription(tx: {
