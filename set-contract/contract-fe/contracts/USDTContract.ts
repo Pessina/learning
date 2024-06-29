@@ -4,27 +4,27 @@ class USDTContract {
   private static CONTRACT_ADDRESS =
     "0x7169D38820dfd117C3FA1f22a697dBA58d90BA06"; // Sepolia USDT contract address
   private provider: ethers.BrowserProvider;
-  private contract: ethers.Contract;
 
   constructor(provider: ethers.BrowserProvider) {
     this.provider = provider;
-    const minimalABI = [
-      "function balanceOf(address account) view returns (uint256)",
-      "function transfer(address to, uint256 amount) returns (bool)",
-      "function _mint(address receiver, uint256 amount) returns (bool)",
-      "event Transfer(address indexed from, address indexed to, uint256 value)",
-      "event Approval(address indexed owner, address indexed spender, uint256 value)",
-    ];
-    this.contract = new ethers.Contract(
-      USDTContract.CONTRACT_ADDRESS,
-      minimalABI,
-      provider
-    );
   }
 
   async getBalance(address: string): Promise<string> {
     try {
-      const balance = await this.contract.balanceOf(address);
+      const iface = new ethers.Interface([
+        "function balanceOf(address) view returns (uint256)",
+      ]);
+      const data = iface.encodeFunctionData("balanceOf", [address]);
+
+      const result = await this.provider.call({
+        to: USDTContract.CONTRACT_ADDRESS,
+        data: data,
+      });
+
+      const [balance] = ethers.AbiCoder.defaultAbiCoder().decode(
+        ["uint256"],
+        result
+      );
       return ethers.formatUnits(balance, 6); // USDT uses 6 decimal places
     } catch (error) {
       console.error("Error getting balance:", error);
@@ -36,9 +36,15 @@ class USDTContract {
     try {
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 6);
-      const tx = await (
-        this.contract.connect(signer) as ethers.Contract
-      ).transfer(to, amountWei);
+      const iface = new ethers.Interface([
+        "function transfer(address,uint256) returns (bool)",
+      ]);
+      const data = iface.encodeFunctionData("transfer", [to, amountWei]);
+
+      const tx = await signer.sendTransaction({
+        to: USDTContract.CONTRACT_ADDRESS,
+        data: data,
+      });
       await tx.wait();
       console.log("Transfer successful");
       return true;
@@ -52,10 +58,15 @@ class USDTContract {
     try {
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 6);
-      const tx = await (this.contract.connect(signer) as ethers.Contract)._mint(
-        receiver,
-        amountWei
-      );
+      const iface = new ethers.Interface([
+        "function _mint(address,uint256) returns (bool)",
+      ]);
+      const data = iface.encodeFunctionData("_mint", [receiver, amountWei]);
+
+      const tx = await signer.sendTransaction({
+        to: USDTContract.CONTRACT_ADDRESS,
+        data: data,
+      });
       await tx.wait();
       console.log(`Successfully minted ${amount} USDT to ${receiver}`);
       return true;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ethers } from "ethers";
-import { USDTContract } from "../utils/USDTContract";
+import { USDTContract } from "../contracts/USDTContract";
 
 export const USDTContractComponent = () => {
   const [address, setAddress] = useState("");

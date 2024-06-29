@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ethers } from "ethers";
-import { CallerRegistryContract } from "../utils/SetContract";
+import { CallerRegistryContract } from "../contracts/SetContract";
 
 export const SetContractComponent = () => {
   const [key, setKey] = useState("");
