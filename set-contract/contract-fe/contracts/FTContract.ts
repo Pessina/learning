@@ -3,11 +3,34 @@ import { ethers } from "ethers";
 
 class FTContract {
   private static CONTRACT_ADDRESS =
-    "0x173Ce72fa48cf8a70811495d778F62c2CAfB31C5";
+    "0xF3F795f8Bde4421ff3e8D18964a39B64fA685690";
   private provider: ethers.BrowserProvider;
 
   constructor(provider: ethers.BrowserProvider) {
     this.provider = provider;
+  }
+
+  async totalSupply(): Promise<string> {
+    try {
+      const iface = new ethers.Interface([
+        "function totalSupply() view returns (uint256)",
+      ]);
+      const data = iface.encodeFunctionData("totalSupply");
+
+      const result = await this.provider.call({
+        to: FTContract.CONTRACT_ADDRESS,
+        data: data,
+      });
+
+      const [supply] = ethers.AbiCoder.defaultAbiCoder().decode(
+        ["uint256"],
+        result
+      );
+      return ethers.formatUnits(supply, 18);
+    } catch (error) {
+      console.error("Error getting total supply:", error);
+      throw error;
+    }
   }
 
   async getBalance(address: string): Promise<string> {
@@ -26,7 +49,7 @@ class FTContract {
         ["uint256"],
         result
       );
-      return ethers.formatUnits(balance, 6); // USDT uses 6 decimal places
+      return ethers.formatUnits(balance, 18);
     } catch (error) {
       console.error("Error getting balance:", error);
       throw error;
@@ -36,10 +59,11 @@ class FTContract {
   async transfer(to: string, amount: string): Promise<boolean> {
     try {
       const signer = await this.provider.getSigner();
-      const amountWei = ethers.parseUnits(amount, 6);
+      const amountWei = ethers.parseUnits(amount, 18);
       const iface = new ethers.Interface([
         "function transfer(address,uint256) returns (bool)",
       ]);
+      console.log({ to, amount });
       const data = iface.encodeFunctionData("transfer", [to, amountWei]);
 
       const transaction = {
@@ -54,7 +78,7 @@ class FTContract {
       console.log("Transfer successful");
       return true;
     } catch (error) {
-      console.error("Error transferring USDT:", error);
+      console.error("Error transferring tokens:", error);
       throw error;
     }
   }
@@ -62,7 +86,7 @@ class FTContract {
   async approve(spender: string, amount: string): Promise<boolean> {
     try {
       const signer = await this.provider.getSigner();
-      const amountWei = ethers.parseUnits(amount, 6);
+      const amountWei = ethers.parseUnits(amount, 18);
       const iface = new ethers.Interface([
         "function approve(address,uint256) returns (bool)",
       ]);
@@ -80,7 +104,7 @@ class FTContract {
       console.log("Approval successful");
       return true;
     } catch (error) {
-      console.error("Error approving USDT:", error);
+      console.error("Error approving tokens:", error);
       throw error;
     }
   }
@@ -92,7 +116,7 @@ class FTContract {
   ): Promise<boolean> {
     try {
       const signer = await this.provider.getSigner();
-      const amountWei = ethers.parseUnits(amount, 6);
+      const amountWei = ethers.parseUnits(amount, 18);
       const iface = new ethers.Interface([
         "function transferFrom(address,address,uint256) returns (bool)",
       ]);
@@ -114,7 +138,30 @@ class FTContract {
       console.log("TransferFrom successful");
       return true;
     } catch (error) {
-      console.error("Error transferring USDT from another address:", error);
+      console.error("Error transferring tokens from another address:", error);
+      throw error;
+    }
+  }
+
+  async allowance(owner: string, spender: string): Promise<string> {
+    try {
+      const iface = new ethers.Interface([
+        "function allowance(address,address) view returns (uint256)",
+      ]);
+      const data = iface.encodeFunctionData("allowance", [owner, spender]);
+
+      const result = await this.provider.call({
+        to: FTContract.CONTRACT_ADDRESS,
+        data: data,
+      });
+
+      const [allowanceAmount] = ethers.AbiCoder.defaultAbiCoder().decode(
+        ["uint256"],
+        result
+      );
+      return ethers.formatUnits(allowanceAmount, 18);
+    } catch (error) {
+      console.error("Error getting allowance:", error);
       throw error;
     }
   }
@@ -122,7 +169,7 @@ class FTContract {
   async mint(receiver: string, amount: string): Promise<boolean> {
     try {
       const signer = await this.provider.getSigner();
-      const amountWei = ethers.parseUnits(amount, 6);
+      const amountWei = ethers.parseUnits(amount, 18);
       const iface = new ethers.Interface([
         "function mint(address,uint256) returns (bool)",
       ]);
@@ -137,10 +184,10 @@ class FTContract {
 
       const tx = await signer.sendTransaction(transaction);
       await tx.wait();
-      console.log(`Successfully minted ${amount} USDT to ${receiver}`);
+      console.log(`Successfully minted ${amount} tokens to ${receiver}`);
       return true;
     } catch (error) {
-      console.error("Error minting USDT:", error);
+      console.error("Error minting tokens:", error);
       throw error;
     }
   }

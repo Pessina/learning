@@ -33,8 +33,6 @@ export async function determineERCStandard(
       contract.supportsInterface(ERC1155_INTERFACE_ID).catch(() => false),
     ]);
 
-    debugger;
-
     if (isERC721) return "ERC721";
     if (isERC1155) return "ERC1155";
 
@@ -51,15 +49,12 @@ export async function determineERCStandard(
         erc20Contract.balanceOf(contractAddress),
         erc20Contract.transfer.staticCall(ethers.ZeroAddress, 0),
       ]);
-      debugger;
       return "ERC20";
     } catch {
-      debugger;
       // If ERC20 check fails, it's not a standard ERC20 token
       return "Unknown";
     }
   } catch (error) {
-    debugger;
     console.error("Error determining ERC standard:", error);
     return "Unknown";
   }

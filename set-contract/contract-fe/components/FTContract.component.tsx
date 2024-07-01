@@ -10,18 +10,20 @@ export const FTContractComponent = () => {
   const [to, setTo] = useState("");
   const [result, setResult] = useState("");
 
+  const initializeContract = async () => {
+    if (typeof window.ethereum === "undefined") {
+      throw new Error("MetaMask is not installed");
+    }
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    const provider = new ethers.BrowserProvider(
+      window.ethereum as ethers.Eip1193Provider
+    );
+    return new FTContract(provider);
+  };
+
   const handleGetBalance = async () => {
     try {
-      if (typeof window.ethereum === "undefined") {
-        throw new Error("MetaMask is not installed");
-      }
-
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      const provider = new ethers.BrowserProvider(
-        window.ethereum as ethers.Eip1193Provider
-      );
-      const contract = new FTContract(provider);
-
+      const contract = await initializeContract();
       const balance = await contract.getBalance(address);
       setResult(`Balance: ${balance} USDT`);
     } catch (error: any) {
@@ -31,16 +33,7 @@ export const FTContractComponent = () => {
 
   const handleTransfer = async () => {
     try {
-      if (typeof window.ethereum === "undefined") {
-        throw new Error("MetaMask is not installed");
-      }
-
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      const provider = new ethers.BrowserProvider(
-        window.ethereum as ethers.Eip1193Provider
-      );
-      const contract = new FTContract(provider);
-
+      const contract = await initializeContract();
       await contract.transfer(to, amount);
       setResult("Transfer successful. Check console for details.");
     } catch (error: any) {
@@ -50,16 +43,7 @@ export const FTContractComponent = () => {
 
   const handleMint = async () => {
     try {
-      if (typeof window.ethereum === "undefined") {
-        throw new Error("MetaMask is not installed");
-      }
-
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      const provider = new ethers.BrowserProvider(
-        window.ethereum as ethers.Eip1193Provider
-      );
-      const contract = new FTContract(provider);
-
+      const contract = await initializeContract();
       await contract.mint(address, amount);
       setResult(`Successfully minted ${amount} USDT to ${address}`);
     } catch (error: any) {
@@ -69,16 +53,7 @@ export const FTContractComponent = () => {
 
   const handleApprove = async () => {
     try {
-      if (typeof window.ethereum === "undefined") {
-        throw new Error("MetaMask is not installed");
-      }
-
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      const provider = new ethers.BrowserProvider(
-        window.ethereum as ethers.Eip1193Provider
-      );
-      const contract = new FTContract(provider);
-
+      const contract = await initializeContract();
       await contract.approve(spender, amount);
       setResult("Approval successful. Check console for details.");
     } catch (error: any) {
@@ -88,18 +63,29 @@ export const FTContractComponent = () => {
 
   const handleTransferFrom = async () => {
     try {
-      if (typeof window.ethereum === "undefined") {
-        throw new Error("MetaMask is not installed");
-      }
-
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      const provider = new ethers.BrowserProvider(
-        window.ethereum as ethers.Eip1193Provider
-      );
-      const contract = new FTContract(provider);
-
+      const contract = await initializeContract();
       await contract.transferFrom(from, to, amount);
       setResult("TransferFrom successful. Check console for details.");
+    } catch (error: any) {
+      setResult(`Error: ${error.message}`);
+    }
+  };
+
+  const handleTotalSupply = async () => {
+    try {
+      const contract = await initializeContract();
+      const supply = await contract.totalSupply();
+      setResult(`Total Supply: ${supply} USDT`);
+    } catch (error: any) {
+      setResult(`Error: ${error.message}`);
+    }
+  };
+
+  const handleAllowance = async () => {
+    try {
+      const contract = await initializeContract();
+      const allowanceAmount = await contract.allowance(from, spender);
+      setResult(`Allowance: ${allowanceAmount} USDT`);
     } catch (error: any) {
       setResult(`Error: ${error.message}`);
     }
@@ -177,6 +163,18 @@ export const FTContractComponent = () => {
           className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
         >
           Transfer From
+        </button>
+        <button
+          onClick={handleTotalSupply}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
+        >
+          Total Supply
+        </button>
+        <button
+          onClick={handleAllowance}
+          className="bg-pink-600 text-white px-4 py-2 rounded-md hover:bg-pink-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-opacity-50"
+        >
+          Allowance
         </button>
       </div>
       {result && (
