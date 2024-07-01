@@ -16,7 +16,7 @@ const erc20Interface = new ethers.Interface([
   "function transfer(address, uint256) returns (bool)",
 ]);
 
-export async function determineERCStandard(
+export async function identifyTokenStandard(
   contractAddress: string,
   provider: ethers.Provider
 ): Promise<"ERC20" | "ERC721" | "ERC1155" | "Unknown"> {
@@ -55,7 +55,30 @@ export async function determineERCStandard(
       return "Unknown";
     }
   } catch (error) {
-    console.error("Error determining ERC standard:", error);
+    console.error("Error identifying token standard:", error);
     return "Unknown";
+  }
+}
+
+export async function fetchTokenDecimals(
+  contractAddress: string,
+  provider: ethers.Provider
+): Promise<number> {
+  const decimalsInterface = new ethers.Interface([
+    "function decimals() view returns (uint8)",
+  ]);
+
+  const contract = new ethers.Contract(
+    contractAddress,
+    decimalsInterface,
+    provider
+  );
+
+  try {
+    const decimals = await contract.decimals();
+    return decimals;
+  } catch (error) {
+    console.error("Error fetching token decimals:", error);
+    return 18; // Default to 18 if unable to fetch decimals
   }
 }

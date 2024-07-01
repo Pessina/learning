@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { determineERCStandard } from "./determineERCStandard";
+import { identifyTokenStandard, fetchTokenDecimals } from "./tokenStandards";
 
 // ERC20 Interface
 const erc20Interface = new ethers.Interface([
@@ -40,7 +40,8 @@ export async function getUserFriendlyDescription(
     return "You are deploying a new contract. Please verify the contract code carefully.";
   }
 
-  const ercStandard = await determineERCStandard(tx.to, provider);
+  const ercStandard = await identifyTokenStandard(tx.to, provider);
+  const decimals = await fetchTokenDecimals(tx.to, provider);
 
   let iface: ethers.Interface;
   switch (ercStandard) {
@@ -65,7 +66,7 @@ export async function getUserFriendlyDescription(
           if (ercStandard === "ERC20") {
             return `You are transferring ${ethers.formatUnits(
               decoded.args[1],
-              18
+              decimals
             )} tokens to ${
               decoded.args[0]
             }. Please verify the recipient address and amount carefully.`;
@@ -79,7 +80,7 @@ export async function getUserFriendlyDescription(
               decoded.args[0]
             } to manage up to ${ethers.formatUnits(
               decoded.args[1],
-              18
+              decimals
             )} of your tokens. This allows them to transfer this amount on your behalf.`;
           } else {
             return `You are approving ${decoded.args[0]} to manage your token ID ${decoded.args[1]}. This allows them to transfer this specific token on your behalf.`;
@@ -89,7 +90,7 @@ export async function getUserFriendlyDescription(
           if (ercStandard === "ERC20") {
             return `You are initiating a transfer of ${ethers.formatUnits(
               decoded.args[2],
-              18
+              decimals
             )} tokens from ${decoded.args[0]} to ${
               decoded.args[1]
             }. Ensure you have the necessary permissions for this action.`;
