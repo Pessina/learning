@@ -1,18 +1,19 @@
 import { ethers } from "ethers";
+import { determineERCStandard } from "./determineERCStandard";
 
 // ERC20 Interface
 const erc20Interface = new ethers.Interface([
-  "function transfer(address, uint256) returns (bool)",
-  "function approve(address, uint256) returns (bool)",
-  "function transferFrom(address, address, uint256) returns (bool)",
+  "function transfer(address, uint256)",
+  "function approve(address, uint256)",
+  "function transferFrom(address, address, uint256)",
 ]);
 
 // ERC721 Interface
 const erc721Interface = new ethers.Interface([
-  "function safeTransferFrom(address, address, uint256, bytes) payable",
-  "function safeTransferFrom(address, address, uint256) payable",
-  "function transferFrom(address, address, uint256) payable",
-  "function approve(address, uint256) payable",
+  "function safeTransferFrom(address, address, uint256, bytes)",
+  "function safeTransferFrom(address, address, uint256)",
+  "function transferFrom(address, address, uint256)",
+  "function approve(address, uint256)",
   "function setApprovalForAll(address, bool)",
 ]);
 
@@ -23,11 +24,14 @@ const erc1155Interface = new ethers.Interface([
   "function setApprovalForAll(address, bool)",
 ]);
 
-export function getUserFriendlyDescription(tx: {
-  data: string;
-  to: string;
-  value?: string;
-}): string {
+export async function getUserFriendlyDescription(
+  tx: {
+    data: string;
+    to: string;
+    value?: string;
+  },
+  provider: ethers.Provider
+): Promise<string> {
   if (tx.data === "0x" && tx.value) {
     return `You are sending ${ethers.formatEther(tx.value)} ETH to ${tx.to}`;
   }
@@ -36,63 +40,86 @@ export function getUserFriendlyDescription(tx: {
     return "You are deploying a new contract. Please verify the contract code carefully.";
   }
 
-  const interfaces = [
-    { name: "ERC20", interface: erc20Interface },
-    { name: "ERC721", interface: erc721Interface },
-    { name: "ERC1155", interface: erc1155Interface },
-  ];
+  const ercStandard = await determineERCStandard(tx.to, provider);
 
-  for (const { name, interface: iface } of interfaces) {
-    try {
-      const decoded = iface.parseTransaction({ data: tx.data });
-      if (decoded) {
-        switch (`${name}:${decoded.name}`) {
-          case "ERC20:transfer":
+  let iface: ethers.Interface;
+  switch (ercStandard) {
+    case "ERC20":
+      iface = erc20Interface;
+      break;
+    case "ERC721":
+      iface = erc721Interface;
+      break;
+    case "ERC1155":
+      iface = erc1155Interface;
+      break;
+    default:
+      return "CAUTION: You are performing an unknown operation. Please verify all transaction details carefully before proceeding.";
+  }
+
+  try {
+    const decoded = iface.parseTransaction({ data: tx.data });
+    if (decoded) {
+      switch (decoded.name) {
+        case "transfer":
+          if (ercStandard === "ERC20") {
             return `You are transferring ${ethers.formatUnits(
               decoded.args[1],
-              6
+              18
             )} tokens to ${
               decoded.args[0]
-            }. If the recipient address is incorrect, your tokens could be lost.`;
-          case "ERC20:approve":
+            }. Please verify the recipient address and amount carefully.`;
+          } else {
+            return `You are transferring token ID ${decoded.args[1]} to ${decoded.args[0]}. Please verify the recipient address and token ID carefully.`;
+          }
+
+        case "approve":
+          if (ercStandard === "ERC20") {
             return `You are approving ${
               decoded.args[0]
-            } to spend ${ethers.formatUnits(
+            } to manage up to ${ethers.formatUnits(
               decoded.args[1],
-              6
-            )} of your tokens. If this address is compromised or malicious, they can transfer your tokens without further consent.`;
-          case "ERC20:transferFrom":
-            return `You are allowing the transfer of ${ethers.formatUnits(
+              18
+            )} of your tokens. This allows them to transfer this amount on your behalf.`;
+          } else {
+            return `You are approving ${decoded.args[0]} to manage your token ID ${decoded.args[1]}. This allows them to transfer this specific token on your behalf.`;
+          }
+
+        case "transferFrom":
+          if (ercStandard === "ERC20") {
+            return `You are initiating a transfer of ${ethers.formatUnits(
               decoded.args[2],
-              6
+              18
             )} tokens from ${decoded.args[0]} to ${
               decoded.args[1]
-            }. Ensure you trust the contract initiating this transfer.`;
-          case "ERC721:safeTransferFrom":
-          case "ERC721:transferFrom":
-            return `You are transferring NFT #${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your NFT could be permanently lost.`;
-          case "ERC721:approve":
-            return `You are approving ${decoded.args[0]} to transfer your NFT #${decoded.args[1]}. This address will be able to transfer this specific NFT on your behalf.`;
-          case "ERC721:setApprovalForAll":
-            return `You are ${decoded.args[1] ? "approving" : "revoking"} ${
-              decoded.args[0]
-            } to manage ALL your NFTs. If approved, this address will have full control over all your NFTs in this collection.`;
-          case "ERC1155:safeTransferFrom":
-            return `You are transferring ${decoded.args[3]} of token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. If the recipient address is incorrect, your tokens could be permanently lost.`;
-          case "ERC1155:safeBatchTransferFrom":
-            return `You are batch transferring multiple token IDs from ${decoded.args[0]} to ${decoded.args[1]}. This operation affects multiple assets simultaneously.`;
-          case "ERC1155:setApprovalForAll":
-            return `You are ${decoded.args[1] ? "approving" : "revoking"} ${
-              decoded.args[0]
-            } to manage ALL your tokens. If approved, this address will have full control over all your tokens in this collection.`;
-          default:
-            return `You are interacting with a ${name} contract. Verify all details carefully.`;
-        }
+            }. Ensure you have the necessary permissions for this action.`;
+          } else {
+            return `You are initiating a transfer of token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. Ensure you have the necessary permissions for this action.`;
+          }
+
+        case "safeTransferFrom":
+          if (ercStandard === "ERC721") {
+            return `You are safely transferring token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. This method includes additional safety checks.`;
+          } else if (ercStandard === "ERC1155") {
+            return `You are safely transferring ${decoded.args[3]} of token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. This method includes additional safety checks.`;
+          }
+
+        case "setApprovalForAll":
+          return `You are ${
+            decoded.args[1] ? "granting" : "revoking"
+          } permission for ${
+            decoded.args[0]
+          } to manage ALL your ${ercStandard} tokens in this collection. This is a powerful permission, use with caution.`;
+
+        case "safeBatchTransferFrom":
+          return `You are batch transferring multiple ${ercStandard} tokens from ${decoded.args[0]} to ${decoded.args[1]}. This operation affects ${decoded.args[2].length} different token IDs simultaneously. Please verify all details carefully.`;
+
+        default:
+          return `You are interacting with a ${ercStandard} contract using the ${decoded.name} function. Please verify all details carefully.`;
       }
-    } catch (error) {
-      // If parsing fails, continue to the next interface
-      console.error(`Error parsing ${name} interface:`, error);
     }
+  } catch (error) {
+    console.error(`Error parsing ${ercStandard} interface:`, error);
   }
 
   return "CAUTION: You are performing an unknown operation. Please verify all transaction details carefully before proceeding.";

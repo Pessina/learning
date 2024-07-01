@@ -3,109 +3,41 @@ import { getUserFriendlyDescription } from "@/validation/functionCall";
 
 class NFTContract {
   private static CONTRACT_ADDRESS =
-    "0x3D72C76702EFBC59e656b4dc91794FbBDb50457d"; // BAYC contract address
+    "0x3D72C76702EFBC59e656b4dc91794FbBDb50457d"; 
   private provider: ethers.BrowserProvider;
-  private contract: ethers.Contract;
 
   constructor(provider: ethers.BrowserProvider) {
     this.provider = provider;
-    const minimalABI = [
-      // ERC721
-      "function balanceOf(address owner) view returns (uint256)",
-      "function ownerOf(uint256 tokenId) view returns (address)",
-      "function safeTransferFrom(address from, address to, uint256 tokenId)",
-      "function safeTransferFrom(address from, address to, uint256 tokenId, bytes data)",
-      "function transferFrom(address from, address to, uint256 tokenId)",
-      "function approve(address to, uint256 tokenId)",
-      "function setApprovalForAll(address operator, bool approved)",
-      "function getApproved(uint256 tokenId) view returns (address)",
-      "function isApprovedForAll(address owner, address operator) view returns (bool)",
-      // ERC1155
-      "function balanceOf(address account, uint256 id) view returns (uint256)",
-      "function balanceOfBatch(address[] calldata accounts, uint256[] calldata ids) view returns (uint256[] memory)",
-      "function setApprovalForAll(address operator, bool approved)",
-      "function isApprovedForAll(address account, address operator) view returns (bool)",
-      "function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes calldata data)",
-      "function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata amounts, bytes calldata data)",
-      // Additional functions
-      "function tokenURI(uint256 tokenId) view returns (string)",
-      "function mint(address to, uint256 tokenId, string memory uri)",
-    ];
-    this.contract = new ethers.Contract(
-      NFTContract.CONTRACT_ADDRESS,
-      minimalABI,
-      provider
-    );
-  }
-
-  async balanceOf(ownerAddress: string, tokenId?: number): Promise<number> {
-    try {
-      if (tokenId !== undefined) {
-        // ERC1155
-        const balance = await this.contract.balanceOf(ownerAddress, tokenId);
-        return Number(balance);
-      } else {
-        // ERC721
-        const balance = await this.contract.balanceOf(ownerAddress);
-        return Number(balance);
-      }
-    } catch (error) {
-      console.error("Error getting balance:", error);
-      throw error;
-    }
-  }
-
-  async balanceOfBatch(accounts: string[], ids: number[]): Promise<number[]> {
-    try {
-      const balances = await this.contract.balanceOfBatch(accounts, ids);
-      return balances.map(Number);
-    } catch (error) {
-      console.error("Error getting batch balances:", error);
-      throw error;
-    }
-  }
-
-  async ownerOf(tokenId: number): Promise<string> {
-    try {
-      return await this.contract.ownerOf(tokenId);
-    } catch (error) {
-      console.error("Error getting owner:", error);
-      throw error;
-    }
-  }
-
-  async tokenURI(tokenId: number): Promise<string> {
-    try {
-      return await this.contract.tokenURI(tokenId);
-    } catch (error) {
-      console.error("Error getting token URI:", error);
-      throw error;
-    }
   }
 
   async safeTransferFrom(
     from: string,
     to: string,
     tokenId: number,
-    amount?: number,
     data?: string
   ): Promise<void> {
     try {
       const signer = await this.provider.getSigner();
-      let tx;
-      if (amount !== undefined) {
-        // ERC1155
-        tx = await (
-          this.contract.connect(signer) as ethers.Contract
-        ).safeTransferFrom(from, to, tokenId, amount, data || "0x");
-      } else {
-        // ERC721
-        tx = await (
-          this.contract.connect(signer) as ethers.Contract
-        ).safeTransferFrom(from, to, tokenId, data || "0x");
-      }
+      const iface = new ethers.Interface([
+        "function safeTransferFrom(address from, address to, uint256 tokenId, bytes data)",
+      ]);
+      const callData = iface.encodeFunctionData("safeTransferFrom", [
+        from,
+        to,
+        tokenId,
+        data || "0x",
+      ]);
+
+      const transaction = {
+        to: NFTContract.CONTRACT_ADDRESS,
+        data: callData,
+      };
+
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
+
+      const tx = await signer.sendTransaction(transaction);
       await tx.wait();
-      console.log(getUserFriendlyDescription(tx));
+      console.log(`Token ${tokenId} safely transferred from ${from} to ${to}`);
     } catch (error) {
       console.error("Error safely transferring token:", error);
       throw error;
@@ -115,11 +47,25 @@ class NFTContract {
   async transferFrom(from: string, to: string, tokenId: number): Promise<void> {
     try {
       const signer = await this.provider.getSigner();
-      const tx = await (
-        this.contract.connect(signer) as ethers.Contract
-      ).transferFrom(from, to, tokenId);
+      const iface = new ethers.Interface([
+        "function transferFrom(address from, address to, uint256 tokenId)",
+      ]);
+      const callData = iface.encodeFunctionData("transferFrom", [
+        from,
+        to,
+        tokenId,
+      ]);
+
+      const transaction = {
+        to: NFTContract.CONTRACT_ADDRESS,
+        data: callData,
+      };
+
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
+
+      const tx = await signer.sendTransaction(transaction);
       await tx.wait();
-      console.log(getUserFriendlyDescription(tx));
+      console.log(`Token ${tokenId} transferred from ${from} to ${to}`);
     } catch (error) {
       console.error("Error transferring token:", error);
       throw error;
@@ -129,11 +75,21 @@ class NFTContract {
   async approve(to: string, tokenId: number): Promise<void> {
     try {
       const signer = await this.provider.getSigner();
-      const tx = await (
-        this.contract.connect(signer) as ethers.Contract
-      ).approve(to, tokenId);
+      const iface = new ethers.Interface([
+        "function approve(address to, uint256 tokenId)",
+      ]);
+      const callData = iface.encodeFunctionData("approve", [to, tokenId]);
+
+      const transaction = {
+        to: NFTContract.CONTRACT_ADDRESS,
+        data: callData,
+      };
+
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
+
+      const tx = await signer.sendTransaction(transaction);
       await tx.wait();
-      console.log(getUserFriendlyDescription(tx));
+      console.log(`Approval given to ${to} for token ${tokenId}`);
     } catch (error) {
       console.error("Error approving token:", error);
       throw error;
@@ -143,31 +99,66 @@ class NFTContract {
   async setApprovalForAll(operator: string, approved: boolean): Promise<void> {
     try {
       const signer = await this.provider.getSigner();
-      const tx = await (
-        this.contract.connect(signer) as ethers.Contract
-      ).setApprovalForAll(operator, approved);
+      const iface = new ethers.Interface([
+        "function setApprovalForAll(address operator, bool approved)",
+      ]);
+      const callData = iface.encodeFunctionData("setApprovalForAll", [
+        operator,
+        approved,
+      ]);
+
+      const transaction = {
+        to: NFTContract.CONTRACT_ADDRESS,
+        data: callData,
+      };
+
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
+
+      const tx = await signer.sendTransaction(transaction);
       await tx.wait();
-      console.log(getUserFriendlyDescription(tx));
+      console.log(
+        `Approval for all set to ${approved} for operator ${operator}`
+      );
     } catch (error) {
       console.error("Error setting approval for all:", error);
       throw error;
     }
   }
 
-  async getApproved(tokenId: number): Promise<string> {
+  async safeTransferFromERC1155(
+    from: string,
+    to: string,
+    id: number,
+    amount: number,
+    data: string
+  ): Promise<void> {
     try {
-      return await this.contract.getApproved(tokenId);
-    } catch (error) {
-      console.error("Error getting approved address:", error);
-      throw error;
-    }
-  }
+      const signer = await this.provider.getSigner();
+      const iface = new ethers.Interface([
+        "function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes calldata data)",
+      ]);
+      const callData = iface.encodeFunctionData("safeTransferFrom", [
+        from,
+        to,
+        id,
+        amount,
+        data,
+      ]);
 
-  async isApprovedForAll(owner: string, operator: string): Promise<boolean> {
-    try {
-      return await this.contract.isApprovedForAll(owner, operator);
+      const transaction = {
+        to: NFTContract.CONTRACT_ADDRESS,
+        data: callData,
+      };
+
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
+
+      const tx = await signer.sendTransaction(transaction);
+      await tx.wait();
+      console.log(
+        `${amount} of token ${id} safely transferred from ${from} to ${to}`
+      );
     } catch (error) {
-      console.error("Error checking approval for all:", error);
+      console.error("Error safely transferring ERC1155 token:", error);
       throw error;
     }
   }
@@ -181,13 +172,52 @@ class NFTContract {
   ): Promise<void> {
     try {
       const signer = await this.provider.getSigner();
-      const tx = await (
-        this.contract.connect(signer) as ethers.Contract
-      ).safeBatchTransferFrom(from, to, ids, amounts, data);
+      const iface = new ethers.Interface([
+        "function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata amounts, bytes calldata data)",
+      ]);
+      const callData = iface.encodeFunctionData("safeBatchTransferFrom", [
+        from,
+        to,
+        ids,
+        amounts,
+        data,
+      ]);
+
+      const transaction = {
+        to: NFTContract.CONTRACT_ADDRESS,
+        data: callData,
+      };
+
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
+
+      const tx = await signer.sendTransaction(transaction);
       await tx.wait();
-      console.log(getUserFriendlyDescription(tx));
+      console.log(`Batch transfer of tokens from ${from} to ${to} completed`);
     } catch (error) {
       console.error("Error batch transferring tokens:", error);
+      throw error;
+    }
+  }
+
+  async tokenURI(tokenId: number): Promise<string> {
+    try {
+      const iface = new ethers.Interface([
+        "function tokenURI(uint256 tokenId) view returns (string)",
+      ]);
+      const callData = iface.encodeFunctionData("tokenURI", [tokenId]);
+
+      const result = await this.provider.call({
+        to: NFTContract.CONTRACT_ADDRESS,
+        data: callData,
+      });
+
+      const [uri] = ethers.AbiCoder.defaultAbiCoder().decode(
+        ["string"],
+        result
+      );
+      return uri;
+    } catch (error) {
+      console.error("Error getting token URI:", error);
       throw error;
     }
   }
@@ -195,11 +225,19 @@ class NFTContract {
   async mint(to: string, tokenId: number, uri: string): Promise<void> {
     try {
       const signer = await this.provider.getSigner();
-      const tx = await (this.contract.connect(signer) as ethers.Contract).mint(
-        to,
-        tokenId,
-        uri
-      );
+      const iface = new ethers.Interface([
+        "function mint(address to, uint256 tokenId, string memory uri)",
+      ]);
+      const callData = iface.encodeFunctionData("mint", [to, tokenId, uri]);
+
+      const transaction = {
+        to: NFTContract.CONTRACT_ADDRESS,
+        data: callData,
+      };
+
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
+
+      const tx = await signer.sendTransaction(transaction);
       await tx.wait();
       console.log(`Token ${tokenId} minted to ${to} with URI ${uri}`);
     } catch (error) {

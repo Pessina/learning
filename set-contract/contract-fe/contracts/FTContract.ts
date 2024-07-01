@@ -47,7 +47,7 @@ class FTContract {
         data: data,
       };
 
-      console.log(getUserFriendlyDescription(transaction));
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
 
       const tx = await signer.sendTransaction(transaction);
       await tx.wait();
@@ -73,7 +73,7 @@ class FTContract {
         data: data,
       };
 
-      console.log(getUserFriendlyDescription(transaction));
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
 
       const tx = await signer.sendTransaction(transaction);
       await tx.wait();
@@ -107,7 +107,7 @@ class FTContract {
         data: data,
       };
 
-      console.log(getUserFriendlyDescription(transaction));
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
 
       const tx = await signer.sendTransaction(transaction);
       await tx.wait();
