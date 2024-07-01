@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 
 class FTContract {
   private static CONTRACT_ADDRESS =
-    "0x7169D38820dfd117C3FA1f22a697dBA58d90BA06"; // Sepolia USDT contract address
+    "0x173Ce72fa48cf8a70811495d778F62c2CAfB31C5";
   private provider: ethers.BrowserProvider;
 
   constructor(provider: ethers.BrowserProvider) {
@@ -124,14 +124,18 @@ class FTContract {
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 6);
       const iface = new ethers.Interface([
-        "function _mint(address,uint256) returns (bool)",
+        "function mint(address,uint256) returns (bool)",
       ]);
-      const data = iface.encodeFunctionData("_mint", [receiver, amountWei]);
+      const data = iface.encodeFunctionData("mint", [receiver, amountWei]);
 
-      const tx = await signer.sendTransaction({
+      const transaction = {
         to: FTContract.CONTRACT_ADDRESS,
         data: data,
-      });
+      };
+
+      console.log(await getUserFriendlyDescription(transaction, this.provider));
+
+      const tx = await signer.sendTransaction(transaction);
       await tx.wait();
       console.log(`Successfully minted ${amount} USDT to ${receiver}`);
       return true;
