@@ -1,3 +1,5 @@
+// Origal repo: https://github.com/Consensys/Tokens/blob/master/contracts/eip20/EIP20.sol
+
 pragma solidity ^0.8.26;
 
 import "./FTInterface.sol";
