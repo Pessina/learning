@@ -29,12 +29,17 @@ class FTContract {
       return ethers.formatUnits(supply, 18);
     } catch (error) {
       console.error("Error getting total supply:", error);
-      throw error;
+      throw new Error(
+        "Failed to get total supply. No additional parameters required."
+      );
     }
   }
 
   async getBalance(address: string): Promise<string> {
     try {
+      if (!address) {
+        throw new Error("Address is required to get balance.");
+      }
       const iface = new ethers.Interface([
         "function balanceOf(address) view returns (uint256)",
       ]);
@@ -52,12 +57,17 @@ class FTContract {
       return ethers.formatUnits(balance, 18);
     } catch (error) {
       console.error("Error getting balance:", error);
-      throw error;
+      throw new Error("Failed to get balance. Required field: address.");
     }
   }
 
   async transfer(to: string, amount: string): Promise<boolean> {
     try {
+      if (!to || !amount) {
+        throw new Error(
+          "Both 'to' address and amount are required for transfer."
+        );
+      }
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 18);
       const iface = new ethers.Interface([
@@ -79,12 +89,19 @@ class FTContract {
       return true;
     } catch (error) {
       console.error("Error transferring tokens:", error);
-      throw error;
+      throw new Error(
+        "Failed to transfer tokens. Required fields: to (address), amount."
+      );
     }
   }
 
   async approve(spender: string, amount: string): Promise<boolean> {
     try {
+      if (!spender || !amount) {
+        throw new Error(
+          "Both spender address and amount are required for approval."
+        );
+      }
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 18);
       const iface = new ethers.Interface([
@@ -105,7 +122,9 @@ class FTContract {
       return true;
     } catch (error) {
       console.error("Error approving tokens:", error);
-      throw error;
+      throw new Error(
+        "Failed to approve tokens. Required fields: spender (address), amount."
+      );
     }
   }
 
@@ -115,6 +134,11 @@ class FTContract {
     amount: string
   ): Promise<boolean> {
     try {
+      if (!from || !to || !amount) {
+        throw new Error(
+          "'from' address, 'to' address, and amount are all required for transferFrom."
+        );
+      }
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 18);
       const iface = new ethers.Interface([
@@ -139,12 +163,19 @@ class FTContract {
       return true;
     } catch (error) {
       console.error("Error transferring tokens from another address:", error);
-      throw error;
+      throw new Error(
+        "Failed to transfer tokens from another address. Required fields: from (address), to (address), amount."
+      );
     }
   }
 
   async allowance(owner: string, spender: string): Promise<string> {
     try {
+      if (!owner || !spender) {
+        throw new Error(
+          "Both owner and spender addresses are required to check allowance."
+        );
+      }
       const iface = new ethers.Interface([
         "function allowance(address,address) view returns (uint256)",
       ]);
@@ -162,12 +193,19 @@ class FTContract {
       return ethers.formatUnits(allowanceAmount, 18);
     } catch (error) {
       console.error("Error getting allowance:", error);
-      throw error;
+      throw new Error(
+        "Failed to get allowance. Required fields: owner (address), spender (address)."
+      );
     }
   }
 
   async mint(receiver: string, amount: string): Promise<boolean> {
     try {
+      if (!receiver || !amount) {
+        throw new Error(
+          "Both receiver address and amount are required for minting."
+        );
+      }
       const signer = await this.provider.getSigner();
       const amountWei = ethers.parseUnits(amount, 18);
       const iface = new ethers.Interface([
@@ -188,7 +226,9 @@ class FTContract {
       return true;
     } catch (error) {
       console.error("Error minting tokens:", error);
-      throw error;
+      throw new Error(
+        "Failed to mint tokens. Required fields: receiver (address), amount."
+      );
     }
   }
 }

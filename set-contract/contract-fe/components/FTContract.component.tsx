@@ -3,182 +3,157 @@ import { ethers } from "ethers";
 import { FTContract } from "../contracts/FTContract";
 
 export const FTContractComponent = () => {
-  const [address, setAddress] = useState("");
-  const [amount, setAmount] = useState("");
-  const [spender, setSpender] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [inputs, setInputs] = useState({
+    address: "",
+    amount: "",
+    spender: "",
+    from: "",
+    to: "",
+  });
   const [result, setResult] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const initializeContract = async () => {
-    if (typeof window.ethereum === "undefined") {
-      throw new Error("MetaMask is not installed");
-    }
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    const provider = new ethers.BrowserProvider(
-      window.ethereum as ethers.Eip1193Provider
-    );
-    return new FTContract(provider);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setInputs((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  const handleGetBalance = async () => {
+  const handleAction = async (
+    action: (contract: FTContract) => Promise<void>
+  ) => {
+    setIsLoading(true);
     try {
-      const contract = await initializeContract();
-      const balance = await contract.getBalance(address);
-      setResult(`Balance: ${balance} USDT`);
+      if (typeof window.ethereum === "undefined") {
+        throw new Error("MetaMask is not installed");
+      }
+
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const provider = new ethers.BrowserProvider(
+        window.ethereum as ethers.Eip1193Provider
+      );
+      const contract = new FTContract(provider);
+
+      await action(contract);
     } catch (error: any) {
       setResult(`Error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleTransfer = async () => {
-    try {
-      const contract = await initializeContract();
-      await contract.transfer(to, amount);
-      setResult("Transfer successful. Check console for details.");
-    } catch (error: any) {
-      setResult(`Error: ${error.message}`);
-    }
-  };
+  const renderInputField = (label: string, name: string) => (
+    <div className="mb-4">
+      <label className="block text-gray-700 text-sm font-bold mb-2">
+        {label}
+      </label>
+      <input
+        type="text"
+        name={name}
+        value={inputs[name as keyof typeof inputs]}
+        onChange={handleInputChange}
+        className="w-full border p-3 rounded-md text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+    </div>
+  );
 
-  const handleMint = async () => {
-    try {
-      const contract = await initializeContract();
-      await contract.mint(address, amount);
-      setResult(`Successfully minted ${amount} USDT to ${address}`);
-    } catch (error: any) {
-      setResult(`Error: ${error.message}`);
-    }
-  };
-
-  const handleApprove = async () => {
-    try {
-      const contract = await initializeContract();
-      await contract.approve(spender, amount);
-      setResult("Approval successful. Check console for details.");
-    } catch (error: any) {
-      setResult(`Error: ${error.message}`);
-    }
-  };
-
-  const handleTransferFrom = async () => {
-    try {
-      const contract = await initializeContract();
-      await contract.transferFrom(from, to, amount);
-      setResult("TransferFrom successful. Check console for details.");
-    } catch (error: any) {
-      setResult(`Error: ${error.message}`);
-    }
-  };
-
-  const handleTotalSupply = async () => {
-    try {
-      const contract = await initializeContract();
-      const supply = await contract.totalSupply();
-      setResult(`Total Supply: ${supply} USDT`);
-    } catch (error: any) {
-      setResult(`Error: ${error.message}`);
-    }
-  };
-
-  const handleAllowance = async () => {
-    try {
-      const contract = await initializeContract();
-      const allowanceAmount = await contract.allowance(from, spender);
-      setResult(`Allowance: ${allowanceAmount} USDT`);
-    } catch (error: any) {
-      setResult(`Error: ${error.message}`);
-    }
-  };
+  const renderActionButton = (
+    label: string,
+    action: (contract: FTContract) => Promise<void>,
+    requiredFields: string[]
+  ) => (
+    <button
+      onClick={() => handleAction(action)}
+      disabled={
+        isLoading ||
+        requiredFields.some((field) => !inputs[field as keyof typeof inputs])
+      }
+      className="bg-blue-600 text-white p-3 rounded-md hover:bg-blue-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {label}
+    </button>
+  );
 
   return (
-    <div className="container mx-auto p-8 bg-gray-100 rounded-lg shadow-md">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">
+    <div className="container mx-auto p-6 bg-gray-100 rounded-lg shadow-lg">
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">
         FT Contract Interaction
       </h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <input
-          type="text"
-          placeholder="Address"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          className="border rounded-md p-2 w-full text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <input
-          type="text"
-          placeholder="Amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="border rounded-md p-2 w-full text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <input
-          type="text"
-          placeholder="Spender"
-          value={spender}
-          onChange={(e) => setSpender(e.target.value)}
-          className="border rounded-md p-2 w-full text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <input
-          type="text"
-          placeholder="From"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className="border rounded-md p-2 w-full text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <input
-          type="text"
-          placeholder="To"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="border rounded-md p-2 w-full text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        {renderInputField("Address", "address")}
+        {renderInputField("Amount", "amount")}
+        {renderInputField("Spender", "spender")}
+        {renderInputField("From", "from")}
+        {renderInputField("To", "to")}
       </div>
-      <div className="flex flex-wrap gap-4 mb-6">
-        <button
-          onClick={handleGetBalance}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-        >
-          Get Balance
-        </button>
-        <button
-          onClick={handleTransfer}
-          className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
-        >
-          Transfer
-        </button>
-        <button
-          onClick={handleMint}
-          className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50"
-        >
-          Mint
-        </button>
-        <button
-          onClick={handleApprove}
-          className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50"
-        >
-          Approve
-        </button>
-        <button
-          onClick={handleTransferFrom}
-          className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
-        >
-          Transfer From
-        </button>
-        <button
-          onClick={handleTotalSupply}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
-        >
-          Total Supply
-        </button>
-        <button
-          onClick={handleAllowance}
-          className="bg-pink-600 text-white px-4 py-2 rounded-md hover:bg-pink-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-opacity-50"
-        >
-          Allowance
-        </button>
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {renderActionButton(
+          "Get Balance",
+          async (contract) => {
+            const balance = await contract.getBalance(inputs.address);
+            setResult(`Balance: ${balance} USDT`);
+          },
+          ["address"]
+        )}
+        {renderActionButton(
+          "Transfer",
+          async (contract) => {
+            await contract.transfer(inputs.to, inputs.amount);
+            setResult("Transfer successful. Check console for details.");
+          },
+          ["to", "amount"]
+        )}
+        {renderActionButton(
+          "Mint",
+          async (contract) => {
+            await contract.mint(inputs.address, inputs.amount);
+            setResult(
+              `Successfully minted ${inputs.amount} USDT to ${inputs.address}`
+            );
+          },
+          ["address", "amount"]
+        )}
+        {renderActionButton(
+          "Approve",
+          async (contract) => {
+            await contract.approve(inputs.spender, inputs.amount);
+            setResult("Approval successful. Check console for details.");
+          },
+          ["spender", "amount"]
+        )}
+        {renderActionButton(
+          "Transfer From",
+          async (contract) => {
+            await contract.transferFrom(inputs.from, inputs.to, inputs.amount);
+            setResult("TransferFrom successful. Check console for details.");
+          },
+          ["from", "to", "amount"]
+        )}
+        {renderActionButton(
+          "Total Supply",
+          async (contract) => {
+            const supply = await contract.totalSupply();
+            setResult(`Total Supply: ${supply} USDT`);
+          },
+          []
+        )}
+        {renderActionButton(
+          "Allowance",
+          async (contract) => {
+            const allowanceAmount = await contract.allowance(
+              inputs.from,
+              inputs.spender
+            );
+            setResult(`Allowance: ${allowanceAmount} USDT`);
+          },
+          ["from", "spender"]
+        )}
       </div>
+      {isLoading && <div className="text-center text-gray-600">Loading...</div>}
       {result && (
-        <div className="mt-6 p-4 bg-white rounded-md shadow-sm text-gray-800 border-l-4 border-blue-500">
+        <div className="mt-6 p-4 bg-white rounded-md shadow text-gray-800 break-words">
           {result}
         </div>
       )}
