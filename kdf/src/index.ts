@@ -1,4 +1,4 @@
-import { fetchDerivedEVMAddress } from "./src/kdf.js";
+import { fetchDerivedEVMAddress } from "./utils/kdf.js";
 
 fetchDerivedEVMAddress({
   signerId: "felipe-near.testnet",

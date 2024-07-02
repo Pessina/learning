@@ -1,10 +1,9 @@
 {
   "name": "kdf",
   "version": "1.0.0",
-  "main": "index.js",
-  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "start": "tsc && node dist/index.js"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +18,10 @@
     "near-api-js": "^4.0.2"
   },
   "devDependencies": {
-    "@types/elliptic": "^6.4.18"
+    "@types/bn.js": "^5.1.5",
+    "@types/elliptic": "^6.4.18",
+    "@types/lodash.pickby": "^4.6.9",
+    "@types/node": "^20.14.9",
+    "typescript": "^5.5.3"
   }
 }
