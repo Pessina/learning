@@ -1,0 +1,24 @@
+{
+  "name": "kdf",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bn.js": "^5.2.1",
+    "canonicalize": "^2.0.0",
+    "elliptic": "^6.5.5",
+    "ethers": "^6.13.1",
+    "lodash.pickby": "^4.6.0",
+    "near-api-js": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/elliptic": "^6.4.18"
+  }
+}
