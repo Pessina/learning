@@ -2,3 +2,4 @@
 *.lock
 .auth
 **/redis_store
+.DS_Store
