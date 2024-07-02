@@ -2,10 +2,6 @@ import BN from "bn.js";
 import { ec as EC } from "elliptic";
 import { ethers } from "ethers";
 import { base_decode } from "near-api-js/lib/utils/serialize.js";
-import {
-  DerivationPath,
-  getCanonicalizedDerivationPath,
-} from "./canonicalize.js";
 import { getRootPublicKey } from "./contract.js";
 
 function najPublicKeyStrToUncompressedHexPoint(
@@ -92,7 +88,7 @@ export const generateBTCAddress = async (
 
 interface FetchDerivedEVMAddressParams {
   signerId: string;
-  path: DerivationPath;
+  path: string;
   nearNetworkId: "testnet" | "mainnet";
   multichainContractId: string;
 }
@@ -112,9 +108,5 @@ export async function fetchDerivedEVMAddress({
     throw new Error("Failed to fetch root public key");
   }
 
-  return await generateEthereumAddress(
-    signerId,
-    getCanonicalizedDerivationPath(path),
-    contractRootPublicKey
-  );
+  return await generateEthereumAddress(signerId, path, contractRootPublicKey);
 }
