@@ -2,8 +2,10 @@ import { ethers } from "ethers";
 import { getUserFriendlyDescription } from "@/validation/functionCall";
 
 class NFTContract {
-  private static CONTRACT_ADDRESS =
-    "0x3D72C76702EFBC59e656b4dc91794FbBDb50457d"; 
+  private static CONTRACT_ADDRESS_ERC721 =
+    "0x3D72C76702EFBC59e656b4dc91794FbBDb50457d";
+  private static CONTRACT_ADDRESS_ERC1155 =
+    "0x3D72C76702EFBC59e656b4dc91794FbBDb50457d";
   private provider: ethers.BrowserProvider;
 
   constructor(provider: ethers.BrowserProvider) {
@@ -17,6 +19,11 @@ class NFTContract {
     data?: string
   ): Promise<void> {
     try {
+      if (!from || !to || tokenId === undefined) {
+        throw new Error(
+          "Missing required fields: from, to, and tokenId are required."
+        );
+      }
       const signer = await this.provider.getSigner();
       const iface = new ethers.Interface([
         "function safeTransferFrom(address from, address to, uint256 tokenId, bytes data)",
@@ -29,7 +36,7 @@ class NFTContract {
       ]);
 
       const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS,
+        to: NFTContract.CONTRACT_ADDRESS_ERC721,
         data: callData,
       };
 
@@ -46,6 +53,11 @@ class NFTContract {
 
   async transferFrom(from: string, to: string, tokenId: number): Promise<void> {
     try {
+      if (!from || !to || tokenId === undefined) {
+        throw new Error(
+          "Missing required fields: from, to, and tokenId are required."
+        );
+      }
       const signer = await this.provider.getSigner();
       const iface = new ethers.Interface([
         "function transferFrom(address from, address to, uint256 tokenId)",
@@ -57,7 +69,7 @@ class NFTContract {
       ]);
 
       const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS,
+        to: NFTContract.CONTRACT_ADDRESS_ERC721,
         data: callData,
       };
 
@@ -74,6 +86,11 @@ class NFTContract {
 
   async approve(to: string, tokenId: number): Promise<void> {
     try {
+      if (!to || tokenId === undefined) {
+        throw new Error(
+          "Missing required fields: to and tokenId are required."
+        );
+      }
       const signer = await this.provider.getSigner();
       const iface = new ethers.Interface([
         "function approve(address to, uint256 tokenId)",
@@ -81,7 +98,7 @@ class NFTContract {
       const callData = iface.encodeFunctionData("approve", [to, tokenId]);
 
       const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS,
+        to: NFTContract.CONTRACT_ADDRESS_ERC721,
         data: callData,
       };
 
@@ -98,6 +115,11 @@ class NFTContract {
 
   async setApprovalForAll(operator: string, approved: boolean): Promise<void> {
     try {
+      if (!operator || approved === undefined) {
+        throw new Error(
+          "Missing required fields: operator and approved are required."
+        );
+      }
       const signer = await this.provider.getSigner();
       const iface = new ethers.Interface([
         "function setApprovalForAll(address operator, bool approved)",
@@ -108,7 +130,7 @@ class NFTContract {
       ]);
 
       const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS,
+        to: NFTContract.CONTRACT_ADDRESS_ERC721,
         data: callData,
       };
 
@@ -133,6 +155,11 @@ class NFTContract {
     data: string
   ): Promise<void> {
     try {
+      if (!from || !to || id === undefined || amount === undefined) {
+        throw new Error(
+          "Missing required fields: from, to, id, and amount are required."
+        );
+      }
       const signer = await this.provider.getSigner();
       const iface = new ethers.Interface([
         "function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes calldata data)",
@@ -142,11 +169,11 @@ class NFTContract {
         to,
         id,
         amount,
-        data,
+        data || "0x",
       ]);
 
       const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS,
+        to: NFTContract.CONTRACT_ADDRESS_ERC721,
         data: callData,
       };
 
@@ -171,6 +198,11 @@ class NFTContract {
     data: string
   ): Promise<void> {
     try {
+      if (!from || !to || !ids || !amounts) {
+        throw new Error(
+          "Missing required fields: from, to, ids, and amounts are required."
+        );
+      }
       const signer = await this.provider.getSigner();
       const iface = new ethers.Interface([
         "function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata amounts, bytes calldata data)",
@@ -180,11 +212,11 @@ class NFTContract {
         to,
         ids,
         amounts,
-        data,
+        data || "0x",
       ]);
 
       const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS,
+        to: NFTContract.CONTRACT_ADDRESS_ERC721,
         data: callData,
       };
 
@@ -201,13 +233,16 @@ class NFTContract {
 
   async tokenURI(tokenId: number): Promise<string> {
     try {
+      if (tokenId === undefined) {
+        throw new Error("Missing required field: tokenId is required.");
+      }
       const iface = new ethers.Interface([
         "function tokenURI(uint256 tokenId) view returns (string)",
       ]);
       const callData = iface.encodeFunctionData("tokenURI", [tokenId]);
 
       const result = await this.provider.call({
-        to: NFTContract.CONTRACT_ADDRESS,
+        to: NFTContract.CONTRACT_ADDRESS_ERC721,
         data: callData,
       });
 
@@ -224,6 +259,11 @@ class NFTContract {
 
   async mint(to: string, tokenId: number, uri: string): Promise<void> {
     try {
+      if (!to || tokenId === undefined || !uri) {
+        throw new Error(
+          "Missing required fields: to, tokenId, and uri are required."
+        );
+      }
       const signer = await this.provider.getSigner();
       const iface = new ethers.Interface([
         "function mint(address to, uint256 tokenId, string memory uri)",
@@ -231,7 +271,7 @@ class NFTContract {
       const callData = iface.encodeFunctionData("mint", [to, tokenId, uri]);
 
       const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS,
+        to: NFTContract.CONTRACT_ADDRESS_ERC721,
         data: callData,
       };
 
