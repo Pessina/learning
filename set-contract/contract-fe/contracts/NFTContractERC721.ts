@@ -4,8 +4,6 @@ import { getUserFriendlyDescription } from "@/validation/functionCall";
 class NFTContract {
   private static CONTRACT_ADDRESS_ERC721 =
     "0x3D72C76702EFBC59e656b4dc91794FbBDb50457d";
-  private static CONTRACT_ADDRESS_ERC1155 =
-    "0x3D72C76702EFBC59e656b4dc91794FbBDb50457d";
   private provider: ethers.BrowserProvider;
 
   constructor(provider: ethers.BrowserProvider) {
@@ -143,90 +141,6 @@ class NFTContract {
       );
     } catch (error) {
       console.error("Error setting approval for all:", error);
-      throw error;
-    }
-  }
-
-  async safeTransferFromERC1155(
-    from: string,
-    to: string,
-    id: number,
-    amount: number,
-    data: string
-  ): Promise<void> {
-    try {
-      if (!from || !to || id === undefined || amount === undefined) {
-        throw new Error(
-          "Missing required fields: from, to, id, and amount are required."
-        );
-      }
-      const signer = await this.provider.getSigner();
-      const iface = new ethers.Interface([
-        "function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes calldata data)",
-      ]);
-      const callData = iface.encodeFunctionData("safeTransferFrom", [
-        from,
-        to,
-        id,
-        amount,
-        data || "0x",
-      ]);
-
-      const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS_ERC721,
-        data: callData,
-      };
-
-      console.log(await getUserFriendlyDescription(transaction, this.provider));
-
-      const tx = await signer.sendTransaction(transaction);
-      await tx.wait();
-      console.log(
-        `${amount} of token ${id} safely transferred from ${from} to ${to}`
-      );
-    } catch (error) {
-      console.error("Error safely transferring ERC1155 token:", error);
-      throw error;
-    }
-  }
-
-  async safeBatchTransferFrom(
-    from: string,
-    to: string,
-    ids: number[],
-    amounts: number[],
-    data: string
-  ): Promise<void> {
-    try {
-      if (!from || !to || !ids || !amounts) {
-        throw new Error(
-          "Missing required fields: from, to, ids, and amounts are required."
-        );
-      }
-      const signer = await this.provider.getSigner();
-      const iface = new ethers.Interface([
-        "function safeBatchTransferFrom(address from, address to, uint256[] calldata ids, uint256[] calldata amounts, bytes calldata data)",
-      ]);
-      const callData = iface.encodeFunctionData("safeBatchTransferFrom", [
-        from,
-        to,
-        ids,
-        amounts,
-        data || "0x",
-      ]);
-
-      const transaction = {
-        to: NFTContract.CONTRACT_ADDRESS_ERC721,
-        data: callData,
-      };
-
-      console.log(await getUserFriendlyDescription(transaction, this.provider));
-
-      const tx = await signer.sendTransaction(transaction);
-      await tx.wait();
-      console.log(`Batch transfer of tokens from ${from} to ${to} completed`);
-    } catch (error) {
-      console.error("Error batch transferring tokens:", error);
       throw error;
     }
   }

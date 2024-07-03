@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { SetContractComponent } from "../components/SetContract.component";
 import { FTContractComponent } from "../components/FTContract.component";
-import { NFTContractComponent } from "../components/NFTContract.component";
+import { NFTContractERC721Component } from "../components/NFTContractERC721.component";
+import { NFTContractERC1155Component } from "../components/NFTContractERC1155.component";
 
 export default function Home() {
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
@@ -67,7 +68,8 @@ export default function Home() {
         <div className="flex flex-col gap-4">
           <SetContractComponent />
           <FTContractComponent />
-          <NFTContractComponent />
+          <NFTContractERC721Component />
+          <NFTContractERC1155Component />
         </div>
       </div>
     </div>

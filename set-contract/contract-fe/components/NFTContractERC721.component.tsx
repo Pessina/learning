@@ -1,20 +1,16 @@
 import { useState } from "react";
 import { ethers } from "ethers";
-import { NFTContract } from "../contracts/NFTContract";
+import { NFTContract } from "../contracts/NFTContractERC721";
 
-export const NFTContractComponent = () => {
+export const NFTContractERC721Component = () => {
   const [inputs, setInputs] = useState({
-    address: "",
     tokenId: "",
     uri: "",
     fromAddress: "",
     toAddress: "",
-    amount: "",
     data: "",
     operator: "",
     approved: false,
-    ids: "",
-    amounts: "",
   });
   const [result, setResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -98,19 +94,15 @@ export const NFTContractComponent = () => {
   return (
     <div className="container mx-auto p-6 bg-gray-100 rounded-lg shadow-lg">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
-        NFT Contract Interaction
+        NFT Contract ERC721 Interaction
       </h1>
       <div className="grid grid-cols-2 gap-4 mb-6">
-        {renderInputField("Address", "address")}
         {renderInputField("Token ID", "tokenId")}
         {renderInputField("URI", "uri")}
         {renderInputField("From Address", "fromAddress")}
         {renderInputField("To Address", "toAddress")}
-        {renderInputField("Amount", "amount")}
         {renderInputField("Data", "data")}
         {renderInputField("Operator", "operator")}
-        {renderInputField("IDs (comma-separated)", "ids")}
-        {renderInputField("Amounts (comma-separated)", "amounts")}
         {renderInputField("Approved", "approved", "checkbox")}
       </div>
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -170,40 +162,6 @@ export const NFTContractComponent = () => {
             );
           },
           ["operator"]
-        )}
-        {renderActionButton(
-          "Safe Transfer From ERC1155",
-          async (contract) => {
-            await contract.safeTransferFromERC1155(
-              inputs.fromAddress,
-              inputs.toAddress,
-              Number(inputs.tokenId),
-              Number(inputs.amount),
-              inputs.data
-            );
-            setResult(
-              `${inputs.amount} of token ${inputs.tokenId} safely transferred from ${inputs.fromAddress} to ${inputs.toAddress}`
-            );
-          },
-          ["fromAddress", "toAddress", "tokenId", "amount", "data"]
-        )}
-        {renderActionButton(
-          "Safe Batch Transfer From",
-          async (contract) => {
-            const tokenIds = inputs.ids.split(",").map(Number);
-            const tokenAmounts = inputs.amounts.split(",").map(Number);
-            await contract.safeBatchTransferFrom(
-              inputs.fromAddress,
-              inputs.toAddress,
-              tokenIds,
-              tokenAmounts,
-              inputs.data
-            );
-            setResult(
-              `Batch transfer from ${inputs.fromAddress} to ${inputs.toAddress} completed`
-            );
-          },
-          ["fromAddress", "toAddress", "ids", "amounts", "data"]
         )}
         {renderActionButton(
           "Mint",
