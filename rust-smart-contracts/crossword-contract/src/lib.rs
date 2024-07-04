@@ -1,9 +1,6 @@
-use std::mem;
-
 use near_sdk::{
-    env, log, near,
-    store::{LookupMap, UnorderedSet},
-    AccountId, NearToken, PanicOnDefault, Promise,
+    collections::UnorderedSet, env, log, near, serde_json, store::LookupMap, AccountId, NearToken,
+    PanicOnDefault, Promise,
 };
 
 const PUZZLE_NUMBER: u8 = 1;
@@ -41,7 +38,7 @@ pub struct Answer {
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone)]
-enum PuzzleStatus {
+pub enum PuzzleStatus {
     Solved { memo: String },
     Unsolved,
 }
@@ -67,7 +64,7 @@ impl Crossword {
     pub fn migrate(owner_id: AccountId) -> Self {
         Self {
             owner_id,
-            puzzles: LookupMap::new(b"p"),
+            puzzles: LookupMap::new(b"c"),
             unsolved_puzzles: UnorderedSet::new(b"u"),
         }
     }
@@ -96,8 +93,8 @@ impl Crossword {
             },
         );
 
-        assert!(!existing.is_none(), "Puzzle with that key already exists");
-        self.unsolved_puzzles.insert(solution_hash);
+        assert!(existing.is_none(), "Puzzle with that key already exists");
+        self.unsolved_puzzles.insert(&solution_hash);
     }
 
     pub fn submit_solution(&mut self, solution: String, memo: String) -> Promise {
@@ -125,6 +122,14 @@ impl Crossword {
         );
 
         Promise::new(env::predecessor_account_id()).transfer(PRIZE_AMOUNT)
+    }
+
+    pub fn get_puzzle_status(&self, solution_hash: String) -> &PuzzleStatus {
+        &self
+            .puzzles
+            .get(&solution_hash)
+            .expect("Puzzle doesn't exist")
+            .status
     }
 }
 
