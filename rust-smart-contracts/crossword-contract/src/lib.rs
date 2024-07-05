@@ -1,6 +1,7 @@
 use near_sdk::{
-    collections::UnorderedSet, env, ext_contract, log, near, serde_json, store::LookupMap,
-    AccountId, Allowance, Gas, NearToken, PanicOnDefault, Promise, PromiseResult, PublicKey,
+    collections::UnorderedSet, env, ext_contract, json_types::Base64VecU8, log, near, serde_json,
+    store::LookupMap, AccountId, Allowance, Gas, NearToken, PanicOnDefault, Promise, PromiseResult,
+    PublicKey,
 };
 
 const PRIZE_AMOUNT: NearToken = NearToken::from_near(1);
@@ -76,6 +77,13 @@ struct Puzzle {
     answers: Vec<Answer>,
 }
 
+#[near(serializers = [json])]
+pub struct NewPuzzleArgs {
+    answer_pk: PublicKey,
+    dimensions: CoordinatePair,
+    answers: Vec<Answer>,
+}
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct Crossword {
@@ -107,23 +115,25 @@ impl Crossword {
         }
     }
 
-    pub fn new_puzzle(&mut self, public_key: PublicKey, answers: Vec<Answer>) {
+    pub fn new_puzzle(&mut self, args: Base64VecU8) {
         assert_eq!(
             env::predecessor_account_id(),
             self.owner_id,
             "Only the owner may call this function"
         );
 
+        let puzzle_args: NewPuzzleArgs = serde_json::from_slice(&args.0.as_slice()).unwrap();
+
         let existing = self.puzzles.insert(
-            public_key.clone(),
+            puzzle_args.answer_pk.clone(),
             Puzzle {
                 status: PuzzleStatus::Unsolved,
-                answers,
+                answers: puzzle_args.answers,
             },
         );
 
         assert!(existing.is_none(), "Puzzle with that key already exists");
-        self.unsolved_puzzles.insert(&public_key);
+        self.unsolved_puzzles.insert(&puzzle_args.answer_pk);
     }
 
     pub fn submit_solution(&mut self, memo: String, solver_pk: PublicKey) -> Promise {
@@ -319,7 +329,7 @@ impl AfterClaim for Crossword {
                     false
                 }
             }
-            PromiseResult::Failed => todo!(),
+            PromiseResult::Failed => false,
         }
     }
 }
