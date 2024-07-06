@@ -1,8 +1,10 @@
-use near_sdk::{env, log, AccountId, Promise};
 use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::{env, log, AccountId, Promise};
 
 use crate::*;
+
+use self::internal::ZERO_TOKEN;
 
 // The structure that will be returned for the methods:
 // * `storage_deposit`
@@ -85,23 +87,52 @@ impl StorageManagement for Contract {
         account_id: Option<AccountId>,
         registration_only: Option<bool>,
     ) -> StorageBalance {
-        /*
-            FILL THIS IN
-        */
-        todo!(); //remove once code is filled in.
+        let account_id = account_id.unwrap_or(env::predecessor_account_id());
+        let deposit = env::attached_deposit();
+        let registration_only = registration_only.unwrap_or(false);
+
+        if self.accounts.contains_key(&account_id) {
+            log!("The account is already registered, refunding the deposit");
+
+            if deposit.gt(&ZERO_TOKEN) {
+                Promise::new(env::predecessor_account_id()).transfer(deposit);
+            };
+        } else {
+            let min_balance = self.storage_balance_bounds().min;
+            if deposit < min_balance {
+                env::panic_str("The attached deposit is less than the minimum storage balance");
+            }
+
+            self.internal_register_account(&account_id);
+
+            let refund = deposit.saturating_sub(min_balance);
+            Promise::new(env::predecessor_account_id()).transfer(refund);
+        }
+
+        StorageBalance {
+            total: self.storage_balance_bounds().min,
+            available: ZERO_TOKEN,
+        }
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        /*
-            FILL THIS IN
-        */
-        todo!(); //remove once code is filled in.
+        let required_storage_balance =
+            env::storage_byte_cost().saturating_mul(self.bytes_for_longest_account_id.into());
+
+        StorageBalanceBounds {
+            min: required_storage_balance,
+            max: Some(required_storage_balance),
+        }
     }
 
     fn storage_balance_of(&self, account_id: AccountId) -> Option<StorageBalance> {
-        /*
-            FILL THIS IN
-        */
-        todo!(); //remove once code is filled in.
+        if self.accounts.contains_key(&account_id) {
+            Some(StorageBalance {
+                total: self.storage_balance_bounds().min,
+                available: ZERO_TOKEN,
+            })
+        } else {
+            None
+        }
     }
 }

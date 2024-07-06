@@ -25,6 +25,7 @@ pub struct Contract {
     pub accounts: LookupMap<AccountId, NearToken>,
     pub total_supply: NearToken,
     pub metadata: LazyOption<FungibleTokenMetadata>,
+    pub bytes_for_longest_account_id: StorageUsage,
 }
 
 /// Helper structure for keys of the persistent collections.
@@ -66,8 +67,12 @@ impl Contract {
             total_supply: casted_total_supply,
             accounts: LookupMap::new(b"a"),
             metadata: LazyOption::new(b"m", Some(&metadata)),
+            bytes_for_longest_account_id: 0,
         };
 
+        this.measure_bytes_for_longest_account_id();
+
+        this.internal_register_account(&owner_id);
         this.internal_deposit(&owner_id, casted_total_supply);
 
         FtMint {
