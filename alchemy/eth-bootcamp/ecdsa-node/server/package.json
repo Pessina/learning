@@ -4,13 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "nodemon index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
+    "ethereum-cryptography": "^2.2.1",
     "express": "^4.18.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
   }
 }

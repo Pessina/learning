@@ -1,0 +1,19 @@
+{
+  "accounts": [
+    {
+      "publicKey": "02cb5caa0bce5e25eebdb61a6f3fc64c74bf030c98a8e032c2301103393ea90611",
+      "privateKey": "72e51eba11c9134ce1226959121aa529c183e0d189e720192d1ae019f5f5b918",
+      "balance": 100
+    },
+    {
+      "publicKey": "02cbd352815d724d9ad4a9dfa5358668d0375e479ea5d013922fa141762f0df5fe",
+      "privateKey": "28266a853295e0243910666ec4484b5f24adb4d133cdf10a51434f3ba4ea43ca",
+      "balance": 50
+    },
+    {
+      "publicKey": "03cd2269c9dda517cc7f77f6e450ba677482f067f492773f93caec6b87a8a1bf1d",
+      "privateKey": "711bf17308abad74b00a8af2f32824961ff90c8a93da9b0d01bfe6d73d001073",
+      "balance": 75
+    }
+  ]
+}

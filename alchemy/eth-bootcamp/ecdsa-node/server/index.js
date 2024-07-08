@@ -1,16 +1,18 @@
+const { accounts } = require("./constants/accounts.json");
 const express = require("express");
 const app = express();
 const cors = require("cors");
+const { recoverPublicKeyFromSignature } = require("./crypto");
+
 const port = 3042;
 
 app.use(cors());
 app.use(express.json());
 
-const balances = {
-  "0x1": 100,
-  "0x2": 50,
-  "0x3": 75,
-};
+const balances = {};
+for (let i = 0; i < accounts.length; i++) {
+  balances[accounts[i].publicKey] = accounts[i].balance;
+}
 
 app.get("/balance/:address", (req, res) => {
   const { address } = req.params;
@@ -19,7 +21,9 @@ app.get("/balance/:address", (req, res) => {
 });
 
 app.post("/send", (req, res) => {
-  const { sender, recipient, amount } = req.body;
+  const { signature, msg } = req.body;
+  const { recipient, amount } = msg;
+  const sender = recoverPublicKeyFromSignature(signature, msg);
 
   setInitialBalance(sender);
   setInitialBalance(recipient);
