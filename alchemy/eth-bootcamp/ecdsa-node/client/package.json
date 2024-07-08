@@ -9,9 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@metamask/providers": "^17.1.0",
     "axios": "^0.27.2",
     "buffer": "^6.0.3",
+    "canonicalize": "^2.0.0",
     "ethereum-cryptography": "^2.2.1",
+    "ethers": "^6.13.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

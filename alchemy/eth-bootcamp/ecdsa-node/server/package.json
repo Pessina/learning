@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "buffer": "^6.0.3",
+    "canonicalize": "^2.0.0",
     "cors": "^2.8.5",
     "ethereum-cryptography": "^2.2.1",
     "express": "^4.18.1"

@@ -1,16 +1,8 @@
-import { Buffer } from "buffer";
-import { sha256 } from "ethereum-cryptography/sha256";
-import { secp256k1 } from "ethereum-cryptography/secp256k1";
 import React, { useState, ChangeEvent, FormEvent } from "react";
 import server from "./server";
+import { walletSign } from "./crypto";
 
-interface TransferProps {
-  address: string;
-  setBalance: (balance: number) => void;
-  privateKey: string;
-}
-
-function Transfer({ address, setBalance, privateKey }: TransferProps) {
+const Transfer: React.FC = () => {
   const [sendAmount, setSendAmount] = useState<string>("");
   const [recipient, setRecipient] = useState<string>("");
 
@@ -22,28 +14,24 @@ function Transfer({ address, setBalance, privateKey }: TransferProps) {
   async function transfer(evt: FormEvent<HTMLFormElement>) {
     evt.preventDefault();
 
-    const msg = JSON.stringify({
+    if (!window.ethereum) {
+      throw new Error("MetaMask is required to transfer");
+    }
+
+    const data = {
       amount: parseInt(sendAmount),
       recipient,
-    });
+    };
 
-    const msgBytes = Buffer.from(msg);
-    const msgHashed = sha256(msgBytes);
-    const msgHashedHex = Buffer.from(msgHashed).toString("hex");
-
-    const signature = secp256k1.sign(msgHashedHex, privateKey);
+    const signature = await walletSign(data, window.ethereum);
 
     try {
       const {
         data: { balance },
       } = await server.post<{ balance: number }>(`send`, {
-        signature: {
-          compactRS: signature.toCompactHex(),
-          recovery: signature.recovery,
-        },
-        msg,
+        signature,
+        data,
       });
-      setBalance(balance);
     } catch (ex) {
       if (ex instanceof Error) {
         alert(ex.message);
@@ -78,6 +66,6 @@ function Transfer({ address, setBalance, privateKey }: TransferProps) {
       <input type="submit" className="button" value="Transfer" />
     </form>
   );
-}
+};
 
 export default Transfer;
