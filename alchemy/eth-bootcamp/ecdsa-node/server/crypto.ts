@@ -1,10 +1,15 @@
 // Experiment file
-const { Buffer } = require("buffer");
-const { secp256k1 } = require("ethereum-cryptography/secp256k1.js");
-const { toHex } = require("ethereum-cryptography/utils.js");
-const { sha256 } = require("ethereum-cryptography/sha256.js");
+import { Buffer } from "buffer";
+import { secp256k1 } from "ethereum-cryptography/secp256k1";
+import { toHex } from "ethereum-cryptography/utils";
+import { sha256 } from "ethereum-cryptography/sha256";
 
-const generateKeyPair = () => {
+interface KeyPair {
+  privateKey: Uint8Array;
+  publicKey: Uint8Array;
+}
+
+const generateKeyPair = (): KeyPair => {
   const privateKey = secp256k1.utils.randomPrivateKey();
   const publicKey = secp256k1.getPublicKey(privateKey);
 
@@ -20,16 +25,13 @@ const getPublicKeyFromSignature = () => {
 
   const sigHex = signature.toCompactHex();
 
-  console.log("sig", signature);
-  console.log("sigHex", sigHex);
-  console.log("sigRecovered", secp256k1.Signature.fromCompact(sigHex));
-  console.log("originalPublicKey", toHex(originalPublicKey));
-  console.log("publicKey", publicKey.toHex());
-
   return publicKey;
 };
 
-const recoverPublicKeyFromSignature = (signature, msg) => {
+const recoverPublicKeyFromSignature = (
+  signature: ReturnType<typeof secp256k1.sign>,
+  msg: string
+): string => {
   const msgBytes = Buffer.from(msg);
   const hash = sha256(msgBytes);
   const msgHashHex = Buffer.from(hash).toString("hex");
@@ -37,7 +39,7 @@ const recoverPublicKeyFromSignature = (signature, msg) => {
   return signature.recoverPublicKey(msgHashHex).toHex();
 };
 
-module.exports = {
+export {
   generateKeyPair,
   getPublicKeyFromSignature,
   recoverPublicKeyFromSignature,

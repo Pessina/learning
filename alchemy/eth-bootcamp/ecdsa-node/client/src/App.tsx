@@ -1,3 +1,4 @@
+import React from "react";
 import Wallet from "./Wallet";
 import Transfer from "./Transfer";
 import "./App.scss";

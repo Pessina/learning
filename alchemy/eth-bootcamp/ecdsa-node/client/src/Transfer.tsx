@@ -1,16 +1,25 @@
 import { Buffer } from "buffer";
 import { sha256 } from "ethereum-cryptography/sha256";
 import { secp256k1 } from "ethereum-cryptography/secp256k1";
-import { useState } from "react";
+import React, { useState, ChangeEvent, FormEvent } from "react";
 import server from "./server";
 
-function Transfer({ address, setBalance, privateKey }) {
-  const [sendAmount, setSendAmount] = useState("");
-  const [recipient, setRecipient] = useState("");
+interface TransferProps {
+  address: string;
+  setBalance: (balance: number) => void;
+  privateKey: string;
+}
 
-  const setValue = (setter) => (evt) => setter(evt.target.value);
+function Transfer({ address, setBalance, privateKey }: TransferProps) {
+  const [sendAmount, setSendAmount] = useState<string>("");
+  const [recipient, setRecipient] = useState<string>("");
 
-  async function transfer(evt) {
+  const setValue =
+    (setter: React.Dispatch<React.SetStateAction<string>>) =>
+    (evt: ChangeEvent<HTMLInputElement>) =>
+      setter(evt.target.value);
+
+  async function transfer(evt: FormEvent<HTMLFormElement>) {
     evt.preventDefault();
 
     const msg = JSON.stringify({
@@ -27,7 +36,7 @@ function Transfer({ address, setBalance, privateKey }) {
     try {
       const {
         data: { balance },
-      } = await server.post(`send`, {
+      } = await server.post<{ balance: number }>(`send`, {
         signature: {
           compactRS: signature.toCompactHex(),
           recovery: signature.recovery,
@@ -36,7 +45,11 @@ function Transfer({ address, setBalance, privateKey }) {
       });
       setBalance(balance);
     } catch (ex) {
-      alert(ex.response.data.message);
+      if (ex instanceof Error) {
+        alert(ex.message);
+      } else {
+        alert("An unknown error occurred");
+      }
     }
   }
 
@@ -50,7 +63,7 @@ function Transfer({ address, setBalance, privateKey }) {
           placeholder="1, 2, 3..."
           value={sendAmount}
           onChange={setValue(setSendAmount)}
-        ></input>
+        />
       </label>
 
       <label>
@@ -59,7 +72,7 @@ function Transfer({ address, setBalance, privateKey }) {
           placeholder="Type an address, for example: 0x2"
           value={recipient}
           onChange={setValue(setRecipient)}
-        ></input>
+        />
       </label>
 
       <input type="submit" className="button" value="Transfer" />

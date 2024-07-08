@@ -1,16 +1,26 @@
+import React, { ChangeEvent } from "react";
 import server from "./server";
 import { secp256k1 } from "ethereum-cryptography/secp256k1";
 import { toHex } from "ethereum-cryptography/utils";
 
-function Wallet({
+interface WalletProps {
+  address: string;
+  setAddress: (address: string) => void;
+  balance: number;
+  setBalance: (balance: number) => void;
+  privateKey: string;
+  setPrivateKey: (privateKey: string) => void;
+}
+
+const Wallet: React.FC<WalletProps> = ({
   address,
   setAddress,
   balance,
   setBalance,
   privateKey,
   setPrivateKey,
-}) {
-  async function onChange(evt) {
+}) => {
+  async function onChange(evt: ChangeEvent<HTMLInputElement>) {
     const privateKey = evt.target.value;
 
     if (privateKey.length < 64) {
@@ -20,12 +30,12 @@ function Wallet({
 
     setPrivateKey(privateKey);
     const publicKey = toHex(secp256k1.getPublicKey(privateKey));
-    console.log(publicKey);
+
     setAddress(publicKey);
     if (publicKey) {
       const {
         data: { balance },
-      } = await server.get(`balance/${publicKey}`);
+      } = await server.get<{ balance: number }>(`balance/${publicKey}`);
       setBalance(balance);
     } else {
       setBalance(0);
@@ -42,12 +52,12 @@ function Wallet({
           placeholder="Type an address, for example: 0x1"
           value={privateKey}
           onChange={onChange}
-        ></input>
+        />
       </label>
 
       <div className="balance">Balance: {balance}</div>
     </div>
   );
-}
+};
 
 export default Wallet;
