@@ -1,5 +1,5 @@
 // Experiment file
-
+const { Buffer } = require("buffer");
 const { secp256k1 } = require("ethereum-cryptography/secp256k1.js");
 const { toHex } = require("ethereum-cryptography/utils.js");
 const { sha256 } = require("ethereum-cryptography/sha256.js");
@@ -30,9 +30,11 @@ const getPublicKeyFromSignature = () => {
 };
 
 const recoverPublicKeyFromSignature = (signature, msg) => {
-  const msgBytes = Buffer.from(msg, "utf-8");
+  const msgBytes = Buffer.from(msg);
   const hash = sha256(msgBytes);
-  return signature.recoverPublicKey(hash);
+  const msgHashHex = Buffer.from(hash).toString("hex");
+
+  return signature.recoverPublicKey(msgHashHex).toHex();
 };
 
 module.exports = {

@@ -3,6 +3,8 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const { recoverPublicKeyFromSignature } = require("./crypto");
+const { secp256k1 } = require("ethereum-cryptography/secp256k1");
+const { toHex } = require("ethereum-cryptography/utils");
 
 const port = 3042;
 
@@ -22,8 +24,13 @@ app.get("/balance/:address", (req, res) => {
 
 app.post("/send", (req, res) => {
   const { signature, msg } = req.body;
-  const { recipient, amount } = msg;
-  const sender = recoverPublicKeyFromSignature(signature, msg);
+  const { recipient, amount } = JSON.parse(msg);
+  const { compactRS, recovery } = signature;
+
+  const sender = recoverPublicKeyFromSignature(
+    secp256k1.Signature.fromCompact(compactRS).addRecoveryBit(recovery),
+    msg
+  );
 
   setInitialBalance(sender);
   setInitialBalance(recipient);
