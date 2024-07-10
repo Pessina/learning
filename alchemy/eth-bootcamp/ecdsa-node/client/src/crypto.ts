@@ -6,9 +6,8 @@ import {
   bytesToHex,
   concatBytes,
   hexToBytes,
-  toHex,
 } from "ethereum-cryptography/utils";
-import { ethers, recoverAddress } from "ethers";
+import { ethers } from "ethers";
 
 const serialize = (data: Record<string, any>): string => {
   let serialized = canonicalize(data);

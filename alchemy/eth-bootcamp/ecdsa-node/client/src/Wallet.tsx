@@ -1,7 +1,5 @@
 import React, { ChangeEvent, useState } from "react";
 import server from "./server";
-import { secp256k1 } from "ethereum-cryptography/secp256k1";
-import { toHex } from "ethereum-cryptography/utils";
 
 interface WalletProps {
   balance: number;
