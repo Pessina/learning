@@ -29,21 +29,15 @@ export const walletSign = async (
   const signer = await provider.getSigner();
   const signature = await signer.signMessage(serialized);
 
-  const publicKey = recoverPublicKeyFromSignature(
-    getRSV(signature),
-    data,
-    signature
-  );
-  // console.log({ address: getETHAddress(publicKey) });
-  console.log({ publicKey });
+  const publicKey = recoverPublicKeyFromSignature(getRSV(signature), data);
+  console.log({ address: getETHAddress(publicKey) });
 
   return signature;
 };
 
 export const recoverPublicKeyFromSignature = (
   { r, s, v }: RSV,
-  data: Record<string, any>,
-  signature: string
+  data: Record<string, any>
 ) => {
   const serialized = serialize(data);
   const encoder = new TextEncoder();
@@ -56,18 +50,16 @@ export const recoverPublicKeyFromSignature = (
   );
   const hash = keccak256(eip191Standard);
 
-  // const signature = new secp256k1.Signature(
-  //   BigInt(r),
-  //   BigInt(s)
-  // ).addRecoveryBit(v);
-  // return signature.recoverPublicKey(hash).toRawBytes(false);
-
-  return ethers.verifyMessage(serialized, signature);
+  const signature = new secp256k1.Signature(
+    BigInt(r),
+    BigInt(s)
+  ).addRecoveryBit(v - 27);
+  return signature.recoverPublicKey(hash).toRawBytes(false);
 };
 
 type RSV = {
-  r: bigint;
-  s: bigint;
+  r: string;
+  s: string;
   v: number;
 };
 
@@ -83,9 +75,9 @@ const getRSV = (signature: string): RSV => {
   }
 
   return {
-    r: BigInt("0x" + cleanSignature.slice(0, 64)),
-    s: BigInt("0x" + cleanSignature.slice(64, 128)),
-    v: parseInt(cleanSignature.slice(128), 16) % 2,
+    r: "0x" + cleanSignature.slice(0, 64),
+    s: "0x" + cleanSignature.slice(64, 128),
+    v: parseInt(cleanSignature.slice(128), 16),
   };
 };
 
