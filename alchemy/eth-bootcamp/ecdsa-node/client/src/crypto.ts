@@ -29,46 +29,40 @@ export const walletSign = async (
   const signer = await provider.getSigner();
   const signature = await signer.signMessage(serialized);
 
-  const publicKey = recoverPublicKeyFromSignature(getRSV(signature), data);
-  console.log({ publicKey, address: getETHAddress(publicKey) });
+  const publicKey = recoverPublicKeyFromSignature(
+    getRSV(signature),
+    data,
+    signature
+  );
+  // console.log({ address: getETHAddress(publicKey) });
+  console.log({ publicKey });
 
   return signature;
 };
 
-// export const localSign = (data: Record<string, any>, privateKey: string) => {
-//   const hashHex = serializeAndHash(data);
-
-//   const signature = secp256k1.sign(hashHex, privateKey);
-//   const recovery = signature.recovery.toString(16).padStart(2, "0");
-
-//   recoverPublicKeyFromSignature(`${signature.toCompactHex}${recovery}`, data);
-
-//   return {
-//     r: signature.r.toString(16).padStart(2, "0"),
-//     s: signature.s.toString(16).padStart(2, "0"),
-//     recovery: signature.recovery,
-//   };
-// };
-
 export const recoverPublicKeyFromSignature = (
   { r, s, v }: RSV,
-  data: Record<string, any>
+  data: Record<string, any>,
+  signature: string
 ) => {
   const serialized = serialize(data);
+  const encoder = new TextEncoder();
 
   const eip191Standard = concatBytes(
-    hexToBytes("0x19"),
-    hexToBytes("0x45"),
-    Buffer.from(`thereum Signed Message:\n${serialized.length}`),
-    Buffer.from(serialized)
+    new Uint8Array([0x19]),
+    new Uint8Array([0x45]),
+    encoder.encode(`thereum Signed Message:\n${serialized.length}`),
+    encoder.encode(serialized)
   );
   const hash = keccak256(eip191Standard);
 
-  const signature = new secp256k1.Signature(
-    BigInt(r),
-    BigInt(s)
-  ).addRecoveryBit(v);
-  return signature.recoverPublicKey(hash).toRawBytes(false);
+  // const signature = new secp256k1.Signature(
+  //   BigInt(r),
+  //   BigInt(s)
+  // ).addRecoveryBit(v);
+  // return signature.recoverPublicKey(hash).toRawBytes(false);
+
+  return ethers.verifyMessage(serialized, signature);
 };
 
 type RSV = {
@@ -101,3 +95,18 @@ function getETHAddress(publicKey: Uint8Array): string {
 
   return `0x${bytesToHex(address)}`;
 }
+
+// export const localSign = (data: Record<string, any>, privateKey: string) => {
+//   const hashHex = serializeAndHash(data);
+
+//   const signature = secp256k1.sign(hashHex, privateKey);
+//   const recovery = signature.recovery.toString(16).padStart(2, "0");
+
+//   recoverPublicKeyFromSignature(`${signature.toCompactHex}${recovery}`, data);
+
+//   return {
+//     r: signature.r.toString(16).padStart(2, "0"),
+//     s: signature.s.toString(16).padStart(2, "0"),
+//     recovery: signature.recovery,
+//   };
+// };
