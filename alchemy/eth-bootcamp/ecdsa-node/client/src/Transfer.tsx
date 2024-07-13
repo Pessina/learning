@@ -26,9 +26,34 @@ const Transfer: React.FC = () => {
     const signature = await walletSign(data, window.ethereum);
 
     try {
-      const {
-        data: { balance },
-      } = await server.post<{ balance: number }>(`send`, {
+      await server.post<{ balance: number }>(`send`, {
+        signature,
+        data,
+      });
+    } catch (ex) {
+      if (ex instanceof Error) {
+        alert(ex.message);
+      } else {
+        alert("An unknown error occurred");
+      }
+    }
+  }
+
+  async function createAccount(evt: React.MouseEvent<HTMLInputElement>) {
+    evt.preventDefault();
+
+    if (!window.ethereum) {
+      throw new Error("MetaMask is required to transfer");
+    }
+
+    const data = {
+      balance: 100,
+    };
+
+    const signature = await walletSign(data, window.ethereum);
+
+    try {
+      await server.post<{ address: string }>(`create-account`, {
         signature,
         data,
       });
@@ -64,6 +89,12 @@ const Transfer: React.FC = () => {
       </label>
 
       <input type="submit" className="button" value="Transfer" />
+      <input
+        type="button"
+        className="button"
+        value="Create Account"
+        onClick={createAccount}
+      />
     </form>
   );
 };

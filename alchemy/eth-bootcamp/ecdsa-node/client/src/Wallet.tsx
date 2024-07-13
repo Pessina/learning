@@ -12,6 +12,8 @@ const Wallet: React.FC<WalletProps> = ({ balance, setBalance }) => {
   async function onChange(evt: ChangeEvent<HTMLInputElement>) {
     const publicKey = evt.target.value;
 
+    setPublicKey(publicKey);
+
     if (publicKey) {
       const {
         data: { balance },

@@ -1,9 +1,7 @@
 import { accounts } from "./constants/accounts.json";
 import express, { Request, Response } from "express";
 import cors from "cors";
-import { recoverPublicKeyFromSignature } from "./crypto";
-import { secp256k1 } from "ethereum-cryptography/secp256k1";
-import { toHex } from "ethereum-cryptography/utils";
+import { recoverAddressFromSignMessage } from "./crypto";
 
 const app = express();
 const port = 3042;
@@ -16,55 +14,67 @@ interface Balances {
 }
 
 const balances: Balances = {};
-for (let i = 0; i < accounts.length; i++) {
-  balances[accounts[i].publicKey] = accounts[i].balance;
-}
 
 app.get("/balance/:address", (req: Request, res: Response) => {
   const { address } = req.params;
-  const balance = balances[address] || 0;
+  const balance = getBalance(address) ?? 0;
+
   res.send({ balance });
 });
 
 interface SendRequestBody {
-  signature: {
-    compactRS: string;
-    recovery: number;
+  signature: string;
+  data: {
+    amount: number;
+    recipient: string;
   };
-  msg: string;
 }
 
 app.post("/send", (req: Request<{}, {}, SendRequestBody>, res: Response) => {
-  const { signature, msg } = req.body;
-  const { recipient, amount } = JSON.parse(msg) as {
-    recipient: string;
-    amount: number;
-  };
-  const { compactRS, recovery } = signature;
+  const { signature, data } = req.body;
+  const { amount, recipient } = data;
 
-  const sender = recoverPublicKeyFromSignature(
-    secp256k1.Signature.fromCompact(compactRS).addRecoveryBit(recovery),
-    msg
-  );
-
-  setInitialBalance(sender);
-  setInitialBalance(recipient);
+  const sender = recoverAddressFromSignMessage(signature, data);
 
   if (balances[sender] < amount) {
     res.status(400).send({ message: "Not enough funds!" });
   } else {
-    balances[sender] -= amount;
-    balances[recipient] += amount;
-    res.send({ balance: balances[sender] });
+    setBalance(sender, (getBalance(sender) ?? 0) - amount);
+    setBalance(recipient, (getBalance(recipient) ?? 0) + amount);
+    res.send({ balance: getBalance(sender) ?? 0 });
   }
 });
+
+interface CreateAccountRequestBody {
+  signature: string;
+  data: {
+    balance: number;
+  };
+}
+
+app.post(
+  "/create-account",
+  (req: Request<{}, {}, CreateAccountRequestBody>, res: Response) => {
+    const { signature, data } = req.body;
+    const address = recoverAddressFromSignMessage(signature, data);
+
+    if (getBalance(address) !== undefined) {
+      return res.status(400).send({ message: "Account already exists" });
+    }
+
+    setBalance(address, data.balance);
+    return res.send({ address });
+  }
+);
 
 app.listen(port, () => {
   console.log(`Listening on port ${port}!`);
 });
 
-function setInitialBalance(address: string): void {
-  if (!balances[address]) {
-    balances[address] = 0;
-  }
-}
+const setBalance = (address: string, balance: number): void => {
+  balances[address.toLowerCase()] = balance;
+};
+
+const getBalance = (address: string): number | undefined => {
+  return balances[address.toLowerCase()];
+};
