@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { identifyTokenStandard, fetchTokenDecimals } from "./tokenStandards";
+import { fetchTokenInfo } from "./tokenStandards";
 
 // ERC20 Interface
 const erc20Interface = new ethers.Interface([
@@ -40,8 +40,10 @@ export async function getUserFriendlyDescription(
     return "You are deploying a new contract. Please verify the contract code carefully.";
   }
 
-  const ercStandard = await identifyTokenStandard(tx.to, provider);
-  const decimals = await fetchTokenDecimals(tx.to, provider);
+  const { ercStandard, decimals, symbol, name } = await fetchTokenInfo(
+    tx.to,
+    provider
+  );
 
   let iface: ethers.Interface;
   switch (ercStandard) {
@@ -67,11 +69,11 @@ export async function getUserFriendlyDescription(
             return `You are transferring ${ethers.formatUnits(
               decoded.args[1],
               decimals
-            )} tokens to ${
+            )} ${symbol} (${name}) tokens to ${
               decoded.args[0]
             }. Please verify the recipient address and amount carefully.`;
           } else {
-            return `You are transferring token ID ${decoded.args[1]} to ${decoded.args[0]}. Please verify the recipient address and token ID carefully.`;
+            return `You are transferring token ID ${decoded.args[1]} (${name}) to ${decoded.args[0]}. Please verify the recipient address and token ID carefully.`;
           }
 
         case "approve":
@@ -81,9 +83,9 @@ export async function getUserFriendlyDescription(
             } to manage up to ${ethers.formatUnits(
               decoded.args[1],
               decimals
-            )} of your tokens. This allows them to transfer this amount on your behalf.`;
+            )} ${symbol} (${name}) tokens. This allows them to transfer this amount on your behalf.`;
           } else {
-            return `You are approving ${decoded.args[0]} to manage your token ID ${decoded.args[1]}. This allows them to transfer this specific token on your behalf.`;
+            return `You are approving ${decoded.args[0]} to manage your token ID ${decoded.args[1]} (${name}). This allows them to transfer this specific token on your behalf.`;
           }
 
         case "transferFrom":
@@ -91,18 +93,18 @@ export async function getUserFriendlyDescription(
             return `You are initiating a transfer of ${ethers.formatUnits(
               decoded.args[2],
               decimals
-            )} tokens from ${decoded.args[0]} to ${
+            )} ${symbol} (${name}) tokens from ${decoded.args[0]} to ${
               decoded.args[1]
             }. Ensure you have the necessary permissions for this action.`;
           } else {
-            return `You are initiating a transfer of token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. Ensure you have the necessary permissions for this action.`;
+            return `You are initiating a transfer of token ID ${decoded.args[2]} (${name}) from ${decoded.args[0]} to ${decoded.args[1]}. Ensure you have the necessary permissions for this action.`;
           }
 
         case "safeTransferFrom":
           if (ercStandard === "ERC721") {
-            return `You are safely transferring token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. This method includes additional safety checks.`;
+            return `You are safely transferring token ID ${decoded.args[2]} (${name}) from ${decoded.args[0]} to ${decoded.args[1]}. This method includes additional safety checks.`;
           } else if (ercStandard === "ERC1155") {
-            return `You are safely transferring ${decoded.args[3]} of token ID ${decoded.args[2]} from ${decoded.args[0]} to ${decoded.args[1]}. This method includes additional safety checks.`;
+            return `You are safely transferring ${decoded.args[3]} of token ID ${decoded.args[2]} (${name}) from ${decoded.args[0]} to ${decoded.args[1]}. This method includes additional safety checks.`;
           }
 
         case "setApprovalForAll":
@@ -110,13 +112,13 @@ export async function getUserFriendlyDescription(
             decoded.args[1] ? "granting" : "revoking"
           } permission for ${
             decoded.args[0]
-          } to manage ALL your ${ercStandard} tokens in this collection. This is a powerful permission, use with caution.`;
+          } to manage ALL your ${ercStandard} (${name}) tokens in this collection. This is a powerful permission, use with caution.`;
 
         case "safeBatchTransferFrom":
-          return `You are batch transferring multiple ${ercStandard} tokens from ${decoded.args[0]} to ${decoded.args[1]}. This operation affects ${decoded.args[2].length} different token IDs simultaneously. Please verify all details carefully.`;
+          return `You are batch transferring multiple ${ercStandard} (${name}) tokens from ${decoded.args[0]} to ${decoded.args[1]}. This operation affects ${decoded.args[2].length} different token IDs simultaneously. Please verify all details carefully.`;
 
         default:
-          return `You are interacting with a ${ercStandard} contract using the ${decoded.name} function. Please verify all details carefully.`;
+          return `You are interacting with a ${ercStandard} (${name}) contract using the ${decoded.name} function. Please verify all details carefully.`;
       }
     }
   } catch (error) {
