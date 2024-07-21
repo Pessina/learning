@@ -16,7 +16,7 @@ use ethers_signers::LocalWallet;
 use lib::signer::SignerInterface;
 use near_sdk::{
     env::{self, sha256},
-    near, require, PanicOnDefault, PromiseOrValue, PublicKey,
+    log, near, require, PanicOnDefault, PromiseOrValue, PublicKey,
 };
 
 use crate::lib::types::SignatureResponse;
@@ -162,6 +162,7 @@ mod test {
         let new_wallet = LocalWallet::from_bytes(&new_private_key.to_bytes()).unwrap();
 
         let signed_message = new_wallet.sign_message(message).await.unwrap();
+
         let address = signed_message.recover(message).unwrap();
 
         let derived_eth_address = derive_eth_address(&new_public_key);

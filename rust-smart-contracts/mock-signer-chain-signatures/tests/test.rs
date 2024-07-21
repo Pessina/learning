@@ -1,5 +1,15 @@
-use mock_signer_chain_signatures::lib::types::{SignRequest, SignatureResponse};
-use near_sdk::{NearToken, PublicKey};
+use ethers_core::{
+    k256::elliptic_curve::{group::GroupEncoding, point::AffineCoordinates},
+    types::{Signature, U256},
+    utils::hex::hex,
+};
+
+use k256::{ecdsa::VerifyingKey, pkcs8::DecodePublicKey, AffinePoint};
+use mock_signer_chain_signatures::{
+    derive_eth_address, derive_public_key,
+    lib::types::{SignRequest, SignatureResponse},
+};
+use near_sdk::{bs58, NearToken, PublicKey};
 use near_workspaces::{network::Sandbox, Contract, Worker};
 
 const CONTRACT_FILE_PATH: &str =
@@ -16,6 +26,7 @@ async fn init() -> (Worker<Sandbox>, Contract) {
 async fn test_contract_sign_request() {
     let (_, contract) = init().await;
     let path = "test";
+    let predecessor = contract.id();
 
     let _ = contract
         .call("new")
@@ -58,11 +69,27 @@ async fn test_contract_sign_request() {
     let execution = result.into_result().unwrap();
     let public_key_response: PublicKey = execution.json().unwrap();
 
-    println!("Public key response: {:?}", public_key_response);
+    let r_bytes = sign_response.big_r.affine_point.x();
+    let r = U256::from_big_endian(&r_bytes);
+    let s = U256::from_big_endian(&sign_response.s.scalar.to_bytes());
+    let v = (sign_response.recovery_id + 27) as u64;
 
-    // let r = sign_response.big_r.affine_point;
-    // let s = sign_response.s.scalar;
-    // let v = sign_response.recovery_id;
+    let signature = Signature { r, s, v };
 
-    // let signature = Signature { r, s, v };
+    let address = signature.recover(sign_request.payload).unwrap();
+
+    let root_public_key = String::from(&public_key_response);
+
+    println!("Root public key: {:?}", root_public_key);
+
+    let root_public_key = root_public_key.split(":").nth(1).unwrap();
+    let root_public_key = bs58::decode(root_public_key).into_vec().unwrap();
+
+    // Failing here
+    let root_public_key = VerifyingKey::from_public_key_der(&root_public_key).unwrap();
+    let public_key = derive_public_key(&root_public_key, predecessor.to_string(), path.to_string());
+    let derived_address = derive_eth_address(&public_key);
+
+    println!("Address: {:?}", address);
+    println!("Public key: {:?}", derived_address);
 }
