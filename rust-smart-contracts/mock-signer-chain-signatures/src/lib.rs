@@ -2,13 +2,14 @@ mod lib {
     pub mod signer;
 }
 
-use std::io::Read;
-
-use ethers_core::k256::{
-    ecdsa::{SigningKey, VerifyingKey},
-    elliptic_curve::{generic_array::GenericArray, scalar::FromUintUnchecked},
-    sha2::{Digest, Sha256},
-    AffinePoint, Scalar, U256,
+use ethers_core::{
+    k256::{
+        ecdsa::{SigningKey, VerifyingKey},
+        elliptic_curve::{generic_array::GenericArray, scalar::FromUintUnchecked},
+        sha2::{Digest, Sha256},
+        AffinePoint, Scalar, U256,
+    },
+    utils::{hex::hex, keccak256},
 };
 use ethers_signers::LocalWallet;
 use lib::signer::{MpcSignature, SignerInterface};
@@ -54,6 +55,12 @@ pub fn derive_private_key(
     let epsilon = derive_epsilon(predecessor, path);
     let new_private_key = epsilon.add(&private_key.as_nonzero_scalar());
     SigningKey::from_bytes(&new_private_key.to_bytes()).unwrap()
+}
+
+pub fn derive_eth_address(public_key: &VerifyingKey) -> String {
+    let encoded_point = public_key.to_encoded_point(false);
+    let address = &keccak256(&encoded_point.as_bytes()[1..])[12..];
+    hex::encode(address)
 }
 
 #[derive(Debug, PanicOnDefault)]
@@ -115,15 +122,12 @@ impl SignerInterface for MockSignerContract {
 
 #[cfg(test)]
 mod test {
-    use std::ops::{Deref, Mul};
-
     use super::*;
 
-    use ethers_core::utils::hex::{self, ToHexExt};
-    use ethers_core::{
-        k256::{elliptic_curve::sec1::ToEncodedPoint, AffinePoint},
-        utils::keccak256,
-    };
+    use std::ops::{Deref, Mul};
+
+    use ethers_core::k256::{elliptic_curve::sec1::ToEncodedPoint, AffinePoint};
+    use ethers_core::utils::hex::ToHexExt;
     use ethers_signers::Signer;
 
     #[tokio::test]
@@ -140,8 +144,7 @@ mod test {
         let public_key = wallet.signer().verifying_key();
 
         let new_public_key =
-            derive_public_key(public_key, account_id.to_string(), path.to_string())
-                .to_encoded_point(false);
+            derive_public_key(public_key, account_id.to_string(), path.to_string());
 
         let new_private_key =
             derive_private_key(&wallet.signer(), account_id.to_string(), path.to_string());
@@ -149,22 +152,17 @@ mod test {
         assert_eq!(
             (AffinePoint::GENERATOR.mul(new_private_key.as_nonzero_scalar().deref()))
                 .to_encoded_point(false),
-            new_public_key
+            new_public_key.to_encoded_point(false)
         );
 
         let message = "Hello";
         let new_wallet = LocalWallet::from_bytes(&new_private_key.to_bytes()).unwrap();
 
         let signed_message = new_wallet.sign_message(message).await.unwrap();
-
         let address = signed_message.recover(message).unwrap();
 
-        let public_key_bytes = &new_public_key.as_bytes()[1..];
-        let public_key_hash = keccak256(public_key_bytes);
+        let derived_eth_address = derive_eth_address(&new_public_key);
 
-        let new_address = &public_key_hash[12..];
-        let new_address = hex::encode(new_address);
-
-        assert_eq!(address.encode_hex(), new_address);
+        assert_eq!(address.encode_hex(), derived_eth_address);
     }
 }
