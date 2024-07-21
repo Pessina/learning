@@ -1,5 +1,5 @@
 use mock_signer_chain_signatures::lib::types::{SignRequest, SignatureResponse};
-use near_sdk::NearToken;
+use near_sdk::{NearToken, PublicKey};
 use near_workspaces::{network::Sandbox, Contract, Worker};
 
 const CONTRACT_FILE_PATH: &str =
@@ -43,7 +43,26 @@ async fn test_contract_sign_request() {
 
     let result = status.await.unwrap();
     let execution = result.into_result().unwrap();
-    let response: SignatureResponse = execution.json().unwrap();
+    let sign_response: SignatureResponse = execution.json().unwrap();
 
-    println!("{:?}", response);
+    println!("Sign response: {:?}", sign_response);
+
+    let status = contract
+        .call("public_key")
+        .max_gas()
+        .transact_async()
+        .await
+        .unwrap();
+
+    let result = status.await.unwrap();
+    let execution = result.into_result().unwrap();
+    let public_key_response: PublicKey = execution.json().unwrap();
+
+    println!("Public key response: {:?}", public_key_response);
+
+    // let r = sign_response.big_r.affine_point;
+    // let s = sign_response.s.scalar;
+    // let v = sign_response.recovery_id;
+
+    // let signature = Signature { r, s, v };
 }

@@ -1,5 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
-use k256::{
+use ethers_core::k256::{
     ecdsa::RecoveryId,
     elliptic_curve::{point::DecompressPoint, scalar::FromUintUnchecked},
     AffinePoint, Scalar, U256,
