@@ -1,7 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use k256::{
     ecdsa::RecoveryId,
-    elliptic_curve::{point::DecompressPoint, scalar::FromUintUnchecked, CurveArithmetic},
+    elliptic_curve::{point::DecompressPoint, scalar::FromUintUnchecked},
     AffinePoint, Scalar, U256,
 };
 
