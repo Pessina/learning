@@ -1,6 +1,3 @@
-use near_sdk::NearToken;
-use near_workspaces::{network::Sandbox, Contract, Worker};
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use k256::{
     ecdsa::RecoveryId,
@@ -8,6 +5,7 @@ use k256::{
     AffinePoint, Scalar, U256,
 };
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize, Debug)]
@@ -27,8 +25,9 @@ impl ScalarExt for Scalar {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, JsonSchema)]
 pub struct SerializableScalar {
+    #[schemars(with = "String")]
     pub scalar: Scalar,
 }
 
@@ -47,8 +46,9 @@ impl BorshDeserialize for SerializableScalar {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy, JsonSchema)]
 pub struct SerializableAffinePoint {
+    #[schemars(with = "String")]
     pub affine_point: AffinePoint,
 }
 
@@ -67,7 +67,17 @@ impl BorshDeserialize for SerializableAffinePoint {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    JsonSchema,
+)]
 pub struct SignatureResponse {
     pub big_r: SerializableAffinePoint,
     pub s: SerializableScalar,
@@ -77,10 +87,7 @@ pub struct SignatureResponse {
 impl SignatureResponse {
     #[must_use]
     pub fn new(r: [u8; 32], s: [u8; 32], v: RecoveryId) -> Option<Self> {
-        let big_r = Option::<AffinePoint>::from(AffinePoint::decompress(
-            &r.into(),
-            u8::from(v.is_y_odd()).into(),
-        ))?;
+        let big_r = AffinePoint::decompress(&r.into(), u8::from(v.is_y_odd()).into()).unwrap();
 
         Some(Self {
             big_r: SerializableAffinePoint {
@@ -104,52 +111,4 @@ impl SignatureResponse {
             recovery_id,
         )
     }
-}
-
-const CONTRACT_FILE_PATH: &str =
-    "./target/wasm32-unknown-unknown/debug/mock_signer_chain_signatures.wasm";
-
-async fn init() -> (Worker<Sandbox>, Contract) {
-    let worker = near_workspaces::sandbox().await.unwrap();
-    let wasm = std::fs::read(CONTRACT_FILE_PATH).unwrap();
-    let contract = worker.dev_deploy(&wasm).await.unwrap();
-    (worker, contract)
-}
-
-#[tokio::test]
-async fn test_contract_sign_request() {
-    let (_, contract) = init().await;
-    let path = "test";
-
-    let _ = contract
-        .call("new")
-        .max_gas()
-        .transact_async()
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-
-    let sign_request = SignRequest {
-        payload: [0; 32],
-        path: path.to_string(),
-        key_version: 0,
-    };
-
-    let status = contract
-        .call("sign")
-        .args_json(serde_json::json!(sign_request))
-        .deposit(NearToken::from_yoctonear(1))
-        .max_gas()
-        .transact_async()
-        .await
-        .unwrap();
-
-    let result = status.await.unwrap();
-    let execution = result.into_result().unwrap();
-
-    println!("Execution: {:?}", execution);
-    let response: SignatureResponse = execution.json().unwrap();
-
-    println!("{:?}", response);
 }

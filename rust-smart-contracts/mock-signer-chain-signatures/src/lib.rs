@@ -1,5 +1,6 @@
 mod lib {
     pub mod signer;
+    pub mod types;
 }
 
 use ethers_core::{
@@ -12,11 +13,13 @@ use ethers_core::{
     utils::{hex::hex, keccak256},
 };
 use ethers_signers::LocalWallet;
-use lib::signer::{MpcSignature, SignerInterface};
+use lib::signer::SignerInterface;
 use near_sdk::{
     env::{self, sha256},
     near, require, PanicOnDefault, PromiseOrValue, PublicKey,
 };
+
+use crate::lib::types::SignatureResponse;
 
 #[must_use]
 pub fn construct_spoof_key(
@@ -92,7 +95,7 @@ impl SignerInterface for MockSignerContract {
         payload: [u8; 32],
         path: &String,
         key_version: u32,
-    ) -> PromiseOrValue<MpcSignature> {
+    ) -> PromiseOrValue<SignatureResponse> {
         require!(key_version == 0, "Key version not supported");
         let predecessor = env::predecessor_account_id();
 
@@ -102,7 +105,7 @@ impl SignerInterface for MockSignerContract {
         let signing_key =
             derive_private_key(&signing_key, predecessor.to_string(), path.to_string());
         let (sig, recid) = signing_key.sign_prehash_recoverable(&payload).unwrap();
-        PromiseOrValue::Value(MpcSignature::from_ecdsa_signature(sig, recid).unwrap())
+        PromiseOrValue::Value(SignatureResponse::from_ecdsa_signature(sig, recid).unwrap())
     }
 
     fn public_key(&self) -> PublicKey {
