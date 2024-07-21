@@ -147,8 +147,6 @@ async fn test_contract_sign_request() {
 
     let result = status.await.unwrap();
     let execution = result.into_result().unwrap();
-
-    println!("Execution: {:?}", execution);
     let response: SignatureResponse = execution.json().unwrap();
 
     println!("{:?}", response);
