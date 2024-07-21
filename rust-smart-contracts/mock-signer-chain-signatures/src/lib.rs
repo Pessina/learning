@@ -74,12 +74,16 @@ impl SignerInterface for MockSignerContract {
 mod test {
     use super::*;
 
-    use ethers_core::k256::{
-        elliptic_curve::{scalar::FromUintUnchecked, sec1::ToEncodedPoint},
-        sha2::{Digest, Sha256},
-        AffinePoint, Scalar, U256,
+    use ethers_core::utils::hex::{self, ToHexExt};
+    use ethers_core::{
+        k256::{
+            elliptic_curve::{scalar::FromUintUnchecked, sec1::ToEncodedPoint},
+            sha2::{Digest, Sha256},
+            AffinePoint, Scalar, U256,
+        },
+        utils::keccak256,
     };
-    use ethers_core::utils::hex;
+    use ethers_signers::Signer;
 
     #[tokio::test]
     async fn test_public_key() {
@@ -109,11 +113,35 @@ mod test {
 
         let new_public_key =
             (AffinePoint::GENERATOR * hash_int + public_key.as_affine()).to_encoded_point(false);
+        let new_public_key_hex_encoded = new_public_key.encode_hex();
 
-        println!(
-            "new_public_key: 04{:?}{:?}",
-            hex::encode(new_public_key.x().unwrap()),
-            hex::encode(new_public_key.y().unwrap())
+        println!("new_public_key: {:?}", new_public_key_hex_encoded);
+
+        let old_private_key = wallet.signer().as_nonzero_scalar();
+        let new_private_key = hash_int.add(&old_private_key);
+
+        assert_eq!(
+            (AffinePoint::GENERATOR * new_private_key).to_encoded_point(false),
+            new_public_key
         );
+
+        println!("new_private_key: {:?}", new_private_key);
+
+        let message = "Hello";
+        let new_wallet = LocalWallet::from_bytes(&new_private_key.to_bytes()).unwrap();
+
+        let signed_message = new_wallet.sign_message(message).await.unwrap();
+
+        let address = signed_message.recover(message).unwrap();
+
+        let new_public_key_hash = keccak256(new_public_key_hex_encoded[2..].as_bytes());
+
+        let new_address = &new_public_key_hash[12..];
+        let new_address = hex::encode(new_address);
+
+        println!("new_address: {:?}", new_address);
+        println!("new_address: {:?}", address.encode_hex());
+
+        // let address_from_new_public_key = new_public_key.encode_hex();
     }
 }
