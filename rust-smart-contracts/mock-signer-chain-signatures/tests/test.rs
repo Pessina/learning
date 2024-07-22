@@ -1,7 +1,7 @@
 use ethers_core::{
     k256::elliptic_curve::{group::GroupEncoding, point::AffineCoordinates},
     types::{Signature, U256},
-    utils::hex::hex,
+    utils::hex::{hex, ToHexExt},
 };
 
 use k256::{ecdsa::VerifyingKey, pkcs8::DecodePublicKey, AffinePoint};
@@ -56,8 +56,6 @@ async fn test_contract_sign_request() {
     let execution = result.into_result().unwrap();
     let sign_response: SignatureResponse = execution.json().unwrap();
 
-    println!("Sign response: {:?}", sign_response);
-
     let status = contract
         .call("public_key")
         .max_gas()
@@ -80,28 +78,13 @@ async fn test_contract_sign_request() {
 
     let root_public_key = String::from(&public_key_response);
 
-    println!("Root public key: {:?}", root_public_key);
-
     let root_public_key = root_public_key.split(":").nth(1).unwrap();
     let root_public_key = bs58::decode(root_public_key).into_vec().unwrap();
-
-    let root_public_key_hex = hex::encode(&root_public_key);
-    println!("root_public_key_hex: {:?}", root_public_key_hex);
-
-    // Convert the raw public key to SEC1 format
-    let sec1_key = if root_public_key.len() == 64 {
-        let mut sec1 = vec![0x04]; // Uncompressed point prefix
-        sec1.extend_from_slice(&root_public_key);
-        sec1
-    } else {
-        root_public_key.to_vec()
-    };
-
-    // Now try to create the VerifyingKey
+    let mut sec1_key = vec![0x04];
+    sec1_key.extend_from_slice(&root_public_key);
     let root_public_key = VerifyingKey::from_sec1_bytes(&sec1_key).unwrap();
     let public_key = derive_public_key(&root_public_key, predecessor.to_string(), path.to_string());
     let derived_address = derive_eth_address(&public_key);
 
-    println!("Address: {:?}", address);
-    println!("Public key: {:?}", derived_address);
+    assert_eq!(address.encode_hex(), derived_address);
 }
