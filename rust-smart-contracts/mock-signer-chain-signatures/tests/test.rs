@@ -13,7 +13,7 @@ use near_sdk::{bs58, NearToken, PublicKey};
 use near_workspaces::{network::Sandbox, Contract, Worker};
 
 const CONTRACT_FILE_PATH: &str =
-    "./target/wasm32-unknown-unknown/debug/mock_signer_chain_signatures.wasm";
+    "./target/wasm32-unknown-unknown/release/mock_signer_chain_signatures.wasm";
 
 async fn init() -> (Worker<Sandbox>, Contract) {
     let worker = near_workspaces::sandbox().await.unwrap();
@@ -85,8 +85,20 @@ async fn test_contract_sign_request() {
     let root_public_key = root_public_key.split(":").nth(1).unwrap();
     let root_public_key = bs58::decode(root_public_key).into_vec().unwrap();
 
-    // Failing here
-    let root_public_key = VerifyingKey::from_public_key_der(&root_public_key).unwrap();
+    let root_public_key_hex = hex::encode(&root_public_key);
+    println!("root_public_key_hex: {:?}", root_public_key_hex);
+
+    // Convert the raw public key to SEC1 format
+    let sec1_key = if root_public_key.len() == 64 {
+        let mut sec1 = vec![0x04]; // Uncompressed point prefix
+        sec1.extend_from_slice(&root_public_key);
+        sec1
+    } else {
+        root_public_key.to_vec()
+    };
+
+    // Now try to create the VerifyingKey
+    let root_public_key = VerifyingKey::from_sec1_bytes(&sec1_key).unwrap();
     let public_key = derive_public_key(&root_public_key, predecessor.to_string(), path.to_string());
     let derived_address = derive_eth_address(&public_key);
 
