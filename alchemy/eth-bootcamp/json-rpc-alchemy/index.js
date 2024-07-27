@@ -1,4 +1,5 @@
 const { Alchemy, Network, Wallet, Utils } = require('alchemy-sdk');
+const ethers = require('ethers')
 require('dotenv').config();
 
 const { TEST_API_KEY, TEST_PRIVATE_KEY } = process.env;
@@ -11,7 +12,7 @@ const alchemy = new Alchemy(settings);
 
 let wallet = new Wallet(TEST_PRIVATE_KEY);
 
-async function main() {
+async function alchemyCall() {
   const nonce = await alchemy.core.getTransactionCount(
     wallet.address,
     'latest'
@@ -34,4 +35,21 @@ async function main() {
   console.log(`https://goerli.etherscan.io/tx/${tx.hash}`);
 }
 
-main();
+const abi = [
+  {"inputs":[],"name":"count","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"dec","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"get","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"inc","outputs":[],"stateMutability":"nonpayable","type":"function"}]
+
+async function contractCall() {
+  const provider = new ethers.AlchemyProvider('sepolia', TEST_API_KEY)
+  const wallet = new ethers.Wallet(TEST_PRIVATE_KEY, provider)
+  const contract = new ethers.Contract('0x5F91eCd82b662D645b15Fd7D2e20E5e5701CCB7A', abi, wallet);
+
+  const tx = await contract.inc()
+  console.log(tx)
+  const count = await contract.count()
+  console.log(count)
+}
+
+contractCall();
