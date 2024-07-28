@@ -1,3 +1,5 @@
 {
-  "CounterModule#Counter": "0xDa7ca1734b5e6D1132cFA73f83B9561bbEa425b1"
+  "CounterModule#Counter": "0xDa7ca1734b5e6D1132cFA73f83B9561bbEa425b1",
+  "EmitWinnerModule#EmitWinner": "0x633a61fa4a917686d995D81b222de2FA3E20aCd6",
+  "EmitWinnerCallerModule#EmitWinnerCaller": "0x0deC3b684e6616B90dE2853a8f85e451CB1Cc8eE"
 }

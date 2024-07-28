@@ -1,8 +1,8 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
 const EmitWinnerModule = buildModule("EmitWinnerModule", (m) => {
-  const counter = m.contract("EmitWinner", []);
-  return { counter };
+  const emitWinner = m.contract("EmitWinner", []);
+  return { emitWinner };
 });
 
 export default EmitWinnerModule;
