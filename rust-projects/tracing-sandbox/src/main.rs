@@ -3,20 +3,15 @@ use tracing_stackdriver::layer as stackdriver_layer;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 fn main() -> anyhow::Result<()> {
-    let stackdriver = stackdriver_layer().with_writer(std::io::stderr);
-
-    let fmt_layer = tracing_subscriber::fmt::layer().with_thread_ids(true);
-
-    let env_filter = EnvFilter::from_default_env();
-    let base_subscriber = Registry::default().with(env_filter);
+    let base_subscriber = Registry::default().with(EnvFilter::from_default_env());
 
     let is_gcp = true;
     let subscriber = if is_gcp {
-        base_subscriber
-            .with(Some(stackdriver))
-            .with(fmt_layer.with_ansi(false))
+        let stackdriver = stackdriver_layer().with_writer(std::io::stderr);
+        base_subscriber.with(None).with(Some(stackdriver))
     } else {
-        base_subscriber.with(None).with(fmt_layer.with_ansi(true))
+        let fmt_layer = tracing_subscriber::fmt::layer().with_thread_ids(true);
+        base_subscriber.with(Some(fmt_layer)).with(None)
     };
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set subscriber");
