@@ -2,6 +2,16 @@ use anchor_lang::prelude::*;
 
 declare_id!("8pZ3UMcQGe6GpXBppbLBE4xQDf5qmfCkvCzTNvDDXx9w");
 
+// Constants for space calculation
+const DISCRIMINATOR_SIZE: usize = 8;
+const PUBKEY_SIZE: usize = 32;
+const U16_SIZE: usize = 2;
+const VEC_PREFIX_SIZE: usize = 4;
+const CHUNK_OVERHEAD: usize = 2 + 1 + 4; // index (u16) + is_stored (bool) + vec prefix
+const MAX_CHUNK_SIZE: usize = 900;
+const MAX_REALLOC_SIZE: usize = 10 * 1024; // 10KB Solana reallocation limit per tx
+const INITIAL_CHUNKS: usize = 5; // Initial number of chunks to allocate
+
 #[program]
 pub mod oversized_transaction {
     use super::*;
@@ -19,28 +29,77 @@ pub mod oversized_transaction {
         data_hash: [u8; 32], 
         chunk_data: Vec<u8>
     ) -> Result<()> {
-        let storage = &mut ctx.accounts.unified_storage;
+        // Validate chunk size
+        require!(chunk_data.len() <= MAX_CHUNK_SIZE, ErrorCode::ChunkTooLarge);
         
-        if chunk_index == 0 {
+        let initial = ctx.accounts.unified_storage.chunks.is_empty();
+        
+        // Initialize storage on first chunk
+        if initial {
+            msg!("Initializing new storage account");
+            let storage = &mut ctx.accounts.unified_storage;
             storage.data_id = data_id;
             storage.total_chunks = total_chunks;
             storage.data_hash = data_hash;
             storage.chunks_stored = 0;
-            storage.chunks = vec![ChunkData::default(); total_chunks as usize];
+            
+            // Set initial capacity (up to 5 chunks)
+            let initial_capacity = if total_chunks as usize <= INITIAL_CHUNKS {
+                total_chunks as usize
+            } else {
+                INITIAL_CHUNKS
+            };
+            storage.chunks = vec![ChunkData::default(); initial_capacity];
+            
+            msg!("Initialized with capacity for {} of {} chunks", 
+                initial_capacity, total_chunks);
         } else {
+            // Verify data consistency
+            let storage = &ctx.accounts.unified_storage;
             require!(storage.data_id == data_id, ErrorCode::InvalidDataId);
             require!(storage.total_chunks == total_chunks, ErrorCode::InvalidTotalChunks);
             require!(storage.data_hash == data_hash, ErrorCode::InvalidDataHash);
         }
         
         require!(chunk_index < total_chunks, ErrorCode::InvalidChunkIndex);
+        
+        // Check if we need to expand the storage for this chunk
+        let needs_expansion = {
+            let storage = &ctx.accounts.unified_storage;
+            chunk_index as usize >= storage.chunks.len()
+        };
+        
+        if needs_expansion {
+            resize_storage_account(
+                &mut ctx.accounts.unified_storage,
+                &ctx.accounts.system_program,
+                &ctx.accounts.payer,
+                chunk_index
+            )?;
+        }
+        
+        // Store the chunk data
+        let storage = &mut ctx.accounts.unified_storage;
+        
+        // Verify we have enough capacity now
+        if chunk_index as usize >= storage.chunks.len() {
+            msg!("Chunk index {} exceeds current capacity of {}. Multiple transactions needed.", 
+                chunk_index, storage.chunks.len());
+            return err!(ErrorCode::NeedsMoreCapacity);
+        }
+        
+        let was_already_stored = storage.chunks[chunk_index as usize].is_stored;
+        
         storage.chunks[chunk_index as usize] = ChunkData {
             index: chunk_index,
-            data: chunk_data,
+            data: chunk_data.clone(),
             is_stored: true,
         };
         
-        storage.chunks_stored = storage.chunks_stored.saturating_add(1);
+        // Only increment count if this is a new chunk
+        if !was_already_stored {
+            storage.chunks_stored = storage.chunks_stored.saturating_add(1);
+        }
         
         msg!("Stored chunk {}/{} with size {} bytes", 
             chunk_index + 1, total_chunks, storage.chunks[chunk_index as usize].data.len());
@@ -51,6 +110,11 @@ pub mod oversized_transaction {
         let storage = &ctx.accounts.unified_storage;
         
         require!(chunk_index < storage.total_chunks, ErrorCode::InvalidChunkIndex);
+        
+        if chunk_index as usize >= storage.chunks.len() {
+            return err!(ErrorCode::ChunkNotAllocated);
+        }
+        
         require!(storage.chunks[chunk_index as usize].is_stored, ErrorCode::ChunkNotStored);
         
         Ok(storage.chunks[chunk_index as usize].data.clone())
@@ -74,6 +138,68 @@ pub mod oversized_transaction {
     }
 }
 
+// Helper function to resize the storage account (respecting Solana's 10KB limit)
+fn resize_storage_account<'info>(
+    unified_storage: &mut Account<'info, UnifiedStorage>,
+    system_program: &Program<'info, System>,
+    payer: &Signer<'info>,
+    chunk_index: u16
+) -> Result<()> {
+    let current_len = unified_storage.chunks.len();
+    
+    // Calculate target capacity
+    let target_idx = chunk_index as usize;
+    let chunks_needed = target_idx - current_len + 1;
+    
+    // Calculate how many chunks we can add within Solana's 10KB limit
+    let space_per_chunk = CHUNK_OVERHEAD + MAX_CHUNK_SIZE;
+    let max_chunks_in_10kb = MAX_REALLOC_SIZE / space_per_chunk;
+    
+    // Take the smaller value: chunks needed or max possible within 10KB
+    let chunks_to_add = if chunks_needed <= max_chunks_in_10kb {
+        chunks_needed
+    } else {
+        max_chunks_in_10kb
+    };
+    
+    let new_capacity = current_len + chunks_to_add;
+    msg!("Resizing storage from {} to {} chunks (+{} chunks)", 
+        current_len, new_capacity, chunks_to_add);
+    
+    // Calculate size increase and new total size
+    let size_increase = chunks_to_add * space_per_chunk;
+    let old_size = unified_storage.to_account_info().data_len();
+    let new_size = old_size + size_increase;
+    
+    // Perform the reallocation
+    let storage_info = unified_storage.to_account_info();
+    storage_info.realloc(new_size, false)?;
+    
+    // Ensure account is rent exempt after reallocation
+    let rent = Rent::get()?;
+    let min_rent = rent.minimum_balance(new_size);
+    
+    if storage_info.lamports() < min_rent {
+        let lamports_needed = min_rent - storage_info.lamports();
+        
+        anchor_lang::system_program::transfer(
+            CpiContext::new(
+                system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: payer.to_account_info(),
+                    to: storage_info,
+                },
+            ),
+            lamports_needed,
+        )?;
+    }
+    
+    // Resize the chunks vector
+    unified_storage.chunks.resize(new_capacity, ChunkData::default());
+    
+    Ok(())
+}
+
 #[derive(Accounts)]
 pub struct Initialize {}
 
@@ -83,8 +209,7 @@ pub struct StoreChunk<'info> {
     #[account(
         init_if_needed,
         payer = payer,
-        space = 8 + 32 + 2 + 2 + 32 + 2 + 4 + 
-            (total_chunks as usize * (2 + 1 + 4 + 1024)), // Each chunk has index, is_stored flag, vec len, and estimated data size
+        space = calculate_initial_space(total_chunks),
         seeds = [
             b"unified_storage", 
             payer.key().as_ref(),
@@ -97,6 +222,24 @@ pub struct StoreChunk<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+// Helper function to calculate initial space for account creation
+fn calculate_initial_space(total_chunks: u16) -> usize {
+    let initial_chunks = if total_chunks as usize <= INITIAL_CHUNKS {
+        total_chunks as usize 
+    } else { 
+        INITIAL_CHUNKS 
+    };
+    
+    // Base size + space for initial chunks
+    DISCRIMINATOR_SIZE + 
+    PUBKEY_SIZE +          // data_id
+    U16_SIZE +             // total_chunks
+    U16_SIZE +             // chunks_stored
+    PUBKEY_SIZE +          // data_hash
+    VEC_PREFIX_SIZE +      // chunks vector prefix
+    (initial_chunks * (CHUNK_OVERHEAD + MAX_CHUNK_SIZE))
 }
 
 #[derive(Accounts)]
@@ -177,6 +320,9 @@ pub enum ErrorCode {
     #[msg("Chunk not stored")]
     ChunkNotStored,
     
+    #[msg("Chunk not yet allocated - need more capacity")]
+    ChunkNotAllocated,
+    
     #[msg("Invalid data ID")]
     InvalidDataId,
     
@@ -185,4 +331,10 @@ pub enum ErrorCode {
     
     #[msg("Invalid data hash")]
     InvalidDataHash,
+    
+    #[msg("Chunk too large (exceeds maximum size)")]
+    ChunkTooLarge,
+    
+    #[msg("Account needs more capacity - send more transactions")]
+    NeedsMoreCapacity,
 }
