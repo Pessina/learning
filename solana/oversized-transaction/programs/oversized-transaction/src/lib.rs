@@ -2,12 +2,11 @@ use anchor_lang::prelude::*;
 
 declare_id!("8pZ3UMcQGe6GpXBppbLBE4xQDf5qmfCkvCzTNvDDXx9w");
 
-// Constants for space calculation
 const DISCRIMINATOR_SIZE: usize = 8;
 const PUBKEY_SIZE: usize = 32;
 const U16_SIZE: usize = 2;
 const VEC_PREFIX_SIZE: usize = 4;
-const CHUNK_OVERHEAD: usize = 2 + 1 + 4; // index (u16) + is_stored (bool) + vec prefix
+const CHUNK_OVERHEAD: usize = U16_SIZE + 1 + VEC_PREFIX_SIZE; // index (u16) + is_stored (bool) + vec prefix
 const MAX_CHUNK_SIZE: usize = 900;
 const MAX_REALLOC_SIZE: usize = 10 * 1024; // 10KB Solana reallocation limit per tx
 const INITIAL_CHUNKS: usize = 5; // Initial number of chunks to allocate
@@ -16,8 +15,29 @@ const INITIAL_CHUNKS: usize = 5; // Initial number of chunks to allocate
 pub mod oversized_transaction {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        msg!("Greetings from: {:?}", ctx.program_id);
+    pub fn init_storage(
+        ctx: Context<InitStorage>, 
+        data_id: [u8; 32], 
+        total_chunks: u16,
+        data_hash: [u8; 32], 
+    ) -> Result<()> {
+        msg!("Initializing new storage account");
+        let storage = &mut ctx.accounts.unified_storage;
+        storage.data_id = data_id;
+        storage.total_chunks = total_chunks;
+        storage.data_hash = data_hash;
+        storage.chunks_stored = 0;
+        
+        // Set initial capacity (up to 5 chunks)
+        let initial_capacity = if total_chunks as usize <= INITIAL_CHUNKS {
+            total_chunks as usize
+        } else {
+            INITIAL_CHUNKS
+        };
+        storage.chunks = vec![ChunkData::default(); initial_capacity];
+        
+        msg!("Initialized with capacity for {} of {} chunks", 
+            initial_capacity, total_chunks);
         Ok(())
     }
 
@@ -29,38 +49,18 @@ pub mod oversized_transaction {
         data_hash: [u8; 32], 
         chunk_data: Vec<u8>
     ) -> Result<()> {
-        // Validate chunk size
         require!(chunk_data.len() <= MAX_CHUNK_SIZE, ErrorCode::ChunkTooLarge);
         
         let initial = ctx.accounts.unified_storage.chunks.is_empty();
+
+        require!(!initial, ErrorCode::StorageNotInitialized);
         
-        // Initialize storage on first chunk
-        if initial {
-            msg!("Initializing new storage account");
-            let storage = &mut ctx.accounts.unified_storage;
-            storage.data_id = data_id;
-            storage.total_chunks = total_chunks;
-            storage.data_hash = data_hash;
-            storage.chunks_stored = 0;
-            
-            // Set initial capacity (up to 5 chunks)
-            let initial_capacity = if total_chunks as usize <= INITIAL_CHUNKS {
-                total_chunks as usize
-            } else {
-                INITIAL_CHUNKS
-            };
-            storage.chunks = vec![ChunkData::default(); initial_capacity];
-            
-            msg!("Initialized with capacity for {} of {} chunks", 
-                initial_capacity, total_chunks);
-        } else {
-            // Verify data consistency
-            let storage = &ctx.accounts.unified_storage;
-            require!(storage.data_id == data_id, ErrorCode::InvalidDataId);
-            require!(storage.total_chunks == total_chunks, ErrorCode::InvalidTotalChunks);
-            require!(storage.data_hash == data_hash, ErrorCode::InvalidDataHash);
-        }
+        // Verify data consistency
+        let storage = &ctx.accounts.unified_storage;
         
+        require!(storage.data_id == data_id, ErrorCode::InvalidDataId);
+        require!(storage.total_chunks == total_chunks, ErrorCode::InvalidTotalChunks);
+        require!(storage.data_hash == data_hash, ErrorCode::InvalidDataHash);    
         require!(chunk_index < total_chunks, ErrorCode::InvalidChunkIndex);
         
         // Check if we need to expand the storage for this chunk
@@ -201,11 +201,8 @@ fn resize_storage_account<'info>(
 }
 
 #[derive(Accounts)]
-pub struct Initialize {}
-
-#[derive(Accounts)]
-#[instruction(data_id: [u8; 32], chunk_index: u16, total_chunks: u16, data_hash: [u8; 32], chunk_data: Vec<u8>)]
-pub struct StoreChunk<'info> {
+#[instruction(data_id: [u8; 32], total_chunks: u16, data_hash: [u8; 32])]
+pub struct InitStorage<'info> {
     #[account(
         init_if_needed,
         payer = payer,
@@ -216,6 +213,28 @@ pub struct StoreChunk<'info> {
             &data_id
         ],
         bump
+    )]
+    pub unified_storage: Account<'info, UnifiedStorage>,
+    
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(data_id: [u8; 32], chunk_index: u16, total_chunks: u16, data_hash: [u8; 32], chunk_data: Vec<u8>)]
+pub struct StoreChunk<'info> {
+    #[account(
+        mut,
+        seeds = [
+            b"unified_storage", 
+            payer.key().as_ref(),
+            &data_id
+        ],
+        bump,
+        realloc = unified_storage.to_account_info().data_len(),
+        realloc::payer = payer,
+        realloc::zero = false
     )]
     pub unified_storage: Account<'info, UnifiedStorage>,
     
@@ -337,4 +356,7 @@ pub enum ErrorCode {
     
     #[msg("Account needs more capacity - send more transactions")]
     NeedsMoreCapacity,
+
+    #[msg("Storage not initialized")]
+    StorageNotInitialized,
 }
