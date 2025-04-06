@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { ComputeBudgetProgram, PublicKey } from "@solana/web3.js";
 import { OversizedTransaction } from "../target/types/oversized_transaction";
 import { assert } from "chai";
 import * as crypto from "crypto";
@@ -337,5 +337,22 @@ describe("oversized-transaction", () => {
     console.log(
       "Test completed - successfully stored and retrieved data using multiple accounts"
     );
+  });
+  it.only("should validate oidc signature correctly", async () => {
+    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 2_000_000,
+    });
+
+    const isValid = await program.methods
+      .verifyOidcSignature()
+      .accounts({
+        payer: provider.wallet.publicKey,
+      })
+      .preInstructions([computeBudgetIx])
+      .rpc();
+
+    console.log("isValid", isValid);
+
+    assert.isTrue(isValid, "Valid signature should verify correctly");
   });
 });
