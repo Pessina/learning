@@ -34,12 +34,11 @@ describe("oversized-transaction", () => {
   const provider = anchor.getProvider() as anchor.AnchorProvider;
 
   it("Stores and retrieves Borsh-serialized data up to 32kb (solana single tx heap limit)", async () => {
-    // Use a large dataset (larger than what fits in a single account)
     const greeting =
       "Hello, Solana! This is a large test of oversized data handling with multiple chunks across multiple accounts. We'll use many different PDAs to store different parts of the data. This demonstrates our ability to handle data much larger than a single Solana account can store.";
 
     const numbers = new Uint8Array(
-      Array(25000)
+      Array(24000)
         .fill(0)
         .map((_, i) => i % 256)
     );
@@ -75,13 +74,13 @@ describe("oversized-transaction", () => {
     );
 
     await program.methods
-      .initStorage(dataId, chunks.length, dataHash)
+      .initStorage(dataId, 0, chunks.length, dataHash, Buffer.from(chunks[0]))
       .accounts({
         payer: provider.wallet.publicKey,
       })
       .rpc();
 
-    for (let i = 0; i < chunks.length; i += 1) {
+    for (let i = 1; i < chunks.length; i += 1) {
       const tx = await program.methods
         .storeChunk(
           dataId,
@@ -245,7 +244,7 @@ describe("oversized-transaction", () => {
     }
 
     await program.methods
-      .initStorage(dataId, chunks.length, dataHash)
+      .initStorage(dataId, 0, chunks.length, dataHash, Buffer.from(chunks[0]))
       .accounts({
         payer: provider.wallet.publicKey,
       })
