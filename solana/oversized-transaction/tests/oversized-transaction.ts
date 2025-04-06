@@ -73,27 +73,37 @@ describe("oversized-transaction", () => {
       `Split data into ${chunks.length} chunks of max ${MAX_CHUNK_SIZE} bytes each`
     );
 
-    await program.methods
-      .initStorage(dataId, 0, chunks.length, dataHash, Buffer.from(chunks[0]))
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .rpc();
+    for (let i = 0; i < chunks.length; i += 1) {
+      let tx: string;
 
-    for (let i = 1; i < chunks.length; i += 1) {
-      const tx = await program.methods
-        .storeChunk(
-          dataId,
-          i,
-          chunks.length,
-          dataHash, // Same hash for integrity verification
-          Buffer.from(chunks[i])
-        )
-        .accounts({
-          payer: provider.wallet.publicKey,
-          // unified_storage is derived by Anchor
-        })
-        .rpc();
+      if (i === 0) {
+        tx = await program.methods
+          .initStorage(
+            dataId,
+            0,
+            chunks.length,
+            dataHash,
+            Buffer.from(chunks[0])
+          )
+          .accounts({
+            payer: provider.wallet.publicKey,
+          })
+          .rpc();
+      } else {
+        tx = await program.methods
+          .storeChunk(
+            dataId,
+            i,
+            chunks.length,
+            dataHash, // Same hash for integrity verification
+            Buffer.from(chunks[i])
+          )
+          .accounts({
+            payer: provider.wallet.publicKey,
+            // unified_storage is derived by Anchor
+          })
+          .rpc();
+      }
 
       console.log(
         `Stored chunk ${i + 1}/${chunks.length}, tx: ${tx.substring(0, 10)}...`
@@ -243,21 +253,36 @@ describe("oversized-transaction", () => {
       );
     }
 
-    await program.methods
-      .initStorage(dataId, 0, chunks.length, dataHash, Buffer.from(chunks[0]))
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .rpc();
-
-    // Store small data chunks
     for (let i = 0; i < chunks.length; i++) {
-      const tx = await program.methods
-        .storeChunk(dataId, i, chunks.length, dataHash, Buffer.from(chunks[i]))
-        .accounts({
-          payer: provider.wallet.publicKey,
-        })
-        .rpc();
+      let tx: string;
+
+      if (i === 0) {
+        tx = await program.methods
+          .initStorage(
+            dataId,
+            0,
+            chunks.length,
+            dataHash,
+            Buffer.from(chunks[0])
+          )
+          .accounts({
+            payer: provider.wallet.publicKey,
+          })
+          .rpc();
+      } else {
+        tx = await program.methods
+          .storeChunk(
+            dataId,
+            i,
+            chunks.length,
+            dataHash,
+            Buffer.from(chunks[i])
+          )
+          .accounts({
+            payer: provider.wallet.publicKey,
+          })
+          .rpc();
+      }
 
       console.log(
         `Stored small chunk ${i + 1}/${chunks.length}, size: ${
