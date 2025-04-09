@@ -2,8 +2,8 @@ use anchor_lang::prelude::*;
 
 mod contract;
 
-// use crate::contract::ethereum_auth::*;
-use crate::contract::oidc_auth::*;
+use crate::contract::ethereum_auth::*;
+// use crate::contract::oidc_auth::*;
 use crate::contract::transaction_buffer::*;
 
 declare_id!("8pZ3UMcQGe6GpXBppbLBE4xQDf5qmfCkvCzTNvDDXx9w");
@@ -60,15 +60,15 @@ pub mod oversized_transaction {
         close_storage_impl(ctx)
     }
 
-    // pub fn verify_ethereum_signature(
-    //     _ctx: Context<VerifyEthereumSignature>,
-    //     eth_data: WalletValidationData,
-    //     compressed_public_key: String,
-    // ) -> Result<bool> {
-    //     verify_ethereum_signature_impl(&eth_data, &compressed_public_key)
-    // }
-
-    pub fn verify_oidc_signature(_ctx: Context<VerifyOIDCSignature>) -> Result<bool> {
-        verify_oidc_signature_impl()
+    pub fn verify_ethereum_signature(
+        _ctx: Context<VerifyEthereumSignature>,
+        eth_data: WalletValidationData,
+        compressed_public_key: String,
+    ) -> Result<bool> {
+        verify_ethereum_signature_impl(&eth_data, &compressed_public_key)
     }
+
+    // pub fn verify_oidc_signature(_ctx: Context<VerifyOIDCSignature>) -> Result<bool> {
+    //     verify_oidc_signature_impl()
+    // }
 }

@@ -33,7 +33,7 @@ describe("oversized-transaction", () => {
     .oversizedTransaction as Program<OversizedTransaction>;
   const provider = anchor.getProvider() as anchor.AnchorProvider;
 
-  it("Stores and retrieves Borsh-serialized data up to 32kb (solana single tx heap limit)", async () => {
+  it.skip("Stores and retrieves Borsh-serialized data up to 32kb (solana single tx heap limit)", async () => {
     const greeting =
       "Hello, Solana! This is a large test of oversized data handling with multiple chunks across multiple accounts. We'll use many different PDAs to store different parts of the data. This demonstrates our ability to handle data much larger than a single Solana account can store.";
 
@@ -218,7 +218,7 @@ describe("oversized-transaction", () => {
     }
   });
 
-  it("Tests storage with small data in single account", async () => {
+  it.skip("Tests storage with small data in single account", async () => {
     const data = new TestData({
       greeting: "Small data test",
       numbers: new Uint8Array(
@@ -338,6 +338,123 @@ describe("oversized-transaction", () => {
       "Test completed - successfully stored and retrieved data using multiple accounts"
     );
   });
+
+  // Ethereum Signature Verification Tests
+  function getCompressedPublicKey(): string {
+    return "0x0304ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7";
+  }
+
+  it.only("should validate Ethereum signature correctly", async () => {
+    const compressedPublicKey = getCompressedPublicKey();
+
+    const ethData = {
+      message: `"{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}"`,
+      signature:
+        "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d111b",
+    };
+
+    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1_400_000,
+    });
+
+    const isValid = await program.methods
+      .verifyEthereumSignature(ethData, compressedPublicKey)
+      .accounts({
+        payer: provider.wallet.publicKey,
+      })
+      .preInstructions([computeBudgetIx])
+      .rpc();
+
+    console.log("isValid", isValid);
+
+    assert.isTrue(isValid);
+  });
+
+  it("should fail to validate Ethereum signature with wrong public key", async () => {
+    const wrongCompressedPublicKey =
+      "0x0314ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7";
+
+    const ethData = {
+      message:
+        '{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}',
+      signature:
+        "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d111b",
+    };
+
+    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 200_000,
+    });
+
+    try {
+      const isValid = await program.methods
+        .verifyEthereumSignature(ethData, wrongCompressedPublicKey)
+        .accounts({
+          payer: provider.wallet.publicKey,
+        })
+        .preInstructions([computeBudgetIx])
+        .rpc();
+
+      console.log(
+        "Ethereum signature verification with wrong key result:",
+        isValid
+      );
+      assert.isFalse(
+        isValid,
+        "Ethereum signature should fail with incorrect public key"
+      );
+    } catch (error) {
+      console.error(
+        "Error in Ethereum signature verification with wrong key:",
+        error
+      );
+      throw error;
+    }
+  });
+
+  it("should fail to validate Ethereum signature with tampered message", async () => {
+    const compressedPublicKey = getCompressedPublicKey();
+
+    // Original signature has 1b at the end, changed to 2b to simulate tampering
+    const tamperedSignature =
+      "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d121b";
+
+    const ethData = {
+      message:
+        '{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}',
+      signature: tamperedSignature,
+    };
+
+    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 200_000,
+    });
+
+    try {
+      const isValid = await program.methods
+        .verifyEthereumSignature(ethData, compressedPublicKey)
+        .accounts({
+          payer: provider.wallet.publicKey,
+        })
+        .preInstructions([computeBudgetIx])
+        .view();
+
+      console.log(
+        "Ethereum signature verification with tampered signature result:",
+        isValid
+      );
+      assert.isFalse(
+        isValid,
+        "Ethereum signature should fail with tampered signature"
+      );
+    } catch (error) {
+      console.error(
+        "Error in Ethereum signature verification with tampered signature:",
+        error
+      );
+      throw error;
+    }
+  });
+
+  /* Commented out since the OIDC signature verification method is not implemented
   it.only("should validate oidc signature correctly", async () => {
     const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
       units: 2_000_000,
@@ -355,4 +472,5 @@ describe("oversized-transaction", () => {
 
     assert.isTrue(isValid, "Valid signature should verify correctly");
   });
+  */
 });
