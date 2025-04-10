@@ -21,7 +21,7 @@ idl-build = ["anchor-lang/idl-build"]
 anchor-lang = { version = "0.31.0", features = ["init-if-needed"] }
 hex = "0.4.3"
 sha3 = "0.10.8"
-tiny-keccak = { version = "2.0.2", features = ["keccak"] }
+libsecp256k1 = "0.7.2"
 # rsa = { version = "0.9.8", features = ["sha2"] }
 schemars = "0.8.22"
 # sha2 = "0.10.8"

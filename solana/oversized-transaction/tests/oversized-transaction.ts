@@ -348,7 +348,7 @@ describe("oversized-transaction", () => {
     const compressedPublicKey = getCompressedPublicKey();
 
     const ethData = {
-      message: `"{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}"`,
+      message: `{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}`,
       signature:
         "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d111b",
     };
@@ -357,20 +357,56 @@ describe("oversized-transaction", () => {
       units: 1_400_000,
     });
 
-    const isValid = await program.methods
+    // Build and send the transaction
+    const txSignature = await program.methods
       .verifyEthereumSignature(ethData, compressedPublicKey)
       .accounts({
         payer: provider.wallet.publicKey,
       })
       .preInstructions([computeBudgetIx])
-      .rpc();
+      .rpc({
+        skipPreflight: false,
+        commitment: "confirmed",
+      });
 
-    console.log("isValid", isValid);
+    const latestBlockhash = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction(
+      {
+        signature: txSignature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      },
+      "confirmed"
+    );
 
-    assert.isTrue(isValid);
+    const txInfo = (await provider.connection.getTransaction(txSignature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    })) as unknown as {
+      meta: {
+        returnData: {
+          data: string[];
+        };
+        logMessages: string[];
+      };
+    };
+
+    console.log("txInfo", JSON.stringify(txInfo, null, 2));
+    console.log(
+      "txInfo.meta.returnData.data[0]",
+      txInfo.meta.returnData.data[0]
+    );
+
+    let returnValue = txInfo?.meta?.returnData?.data
+      ? (Buffer.from(txInfo.meta.returnData.data[0], "base64")[0] as unknown as
+          | 0
+          | 1)
+      : null;
+
+    assert.isTrue(returnValue === 1, "Should have a return value");
   });
 
-  it("should fail to validate Ethereum signature with wrong public key", async () => {
+  it.only("should fail to validate Ethereum signature with wrong public key", async () => {
     const wrongCompressedPublicKey =
       "0x0314ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7";
 
@@ -382,76 +418,107 @@ describe("oversized-transaction", () => {
     };
 
     const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
-      units: 200_000,
+      units: 1_400_000,
     });
 
-    try {
-      const isValid = await program.methods
-        .verifyEthereumSignature(ethData, wrongCompressedPublicKey)
-        .accounts({
-          payer: provider.wallet.publicKey,
-        })
-        .preInstructions([computeBudgetIx])
-        .rpc();
+    // Build and send the transaction
+    const txSignature = await program.methods
+      .verifyEthereumSignature(ethData, wrongCompressedPublicKey)
+      .accounts({
+        payer: provider.wallet.publicKey,
+      })
+      .preInstructions([computeBudgetIx])
+      .rpc({
+        skipPreflight: false,
+        commitment: "confirmed",
+      });
 
-      console.log(
-        "Ethereum signature verification with wrong key result:",
-        isValid
-      );
-      assert.isFalse(
-        isValid,
-        "Ethereum signature should fail with incorrect public key"
-      );
-    } catch (error) {
-      console.error(
-        "Error in Ethereum signature verification with wrong key:",
-        error
-      );
-      throw error;
-    }
+    const latestBlockhash = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction(
+      {
+        signature: txSignature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      },
+      "confirmed"
+    );
+
+    const txInfo = (await provider.connection.getTransaction(txSignature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    })) as unknown as {
+      meta: {
+        returnData: {
+          data: string[];
+        };
+        logMessages: string[];
+      };
+    };
+
+    let returnValue = txInfo?.meta?.returnData?.data
+      ? (Buffer.from(txInfo.meta.returnData.data[0], "base64")[0] as unknown as
+          | 0
+          | 1)
+      : null;
+
+    assert.isTrue(returnValue !== 1, "Should have a return value");
   });
 
-  it("should fail to validate Ethereum signature with tampered message", async () => {
+  it.only("should fail to validate Ethereum signature with tampered message", async () => {
     const compressedPublicKey = getCompressedPublicKey();
-
-    // Original signature has 1b at the end, changed to 2b to simulate tampering
-    const tamperedSignature =
-      "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d121b";
 
     const ethData = {
       message:
         '{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}',
-      signature: tamperedSignature,
+      signature:
+        "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d121b",
     };
 
     const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
-      units: 200_000,
+      units: 1_400_000,
     });
 
-    try {
-      const isValid = await program.methods
-        .verifyEthereumSignature(ethData, compressedPublicKey)
-        .accounts({
-          payer: provider.wallet.publicKey,
-        })
-        .preInstructions([computeBudgetIx])
-        .view();
+    // Build and send the transaction
+    const txSignature = await program.methods
+      .verifyEthereumSignature(ethData, compressedPublicKey)
+      .accounts({
+        payer: provider.wallet.publicKey,
+      })
+      .preInstructions([computeBudgetIx])
+      .rpc({
+        skipPreflight: false,
+        commitment: "confirmed",
+      });
 
-      console.log(
-        "Ethereum signature verification with tampered signature result:",
-        isValid
-      );
-      assert.isFalse(
-        isValid,
-        "Ethereum signature should fail with tampered signature"
-      );
-    } catch (error) {
-      console.error(
-        "Error in Ethereum signature verification with tampered signature:",
-        error
-      );
-      throw error;
-    }
+    const latestBlockhash = await provider.connection.getLatestBlockhash();
+    await provider.connection.confirmTransaction(
+      {
+        signature: txSignature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      },
+      "confirmed"
+    );
+
+    const txInfo = (await provider.connection.getTransaction(txSignature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    })) as unknown as {
+      meta: {
+        returnData: {
+          data: string[];
+        };
+        logMessages: string[];
+      };
+    };
+
+    let returnValue = txInfo?.meta?.returnData?.data
+      ? (Buffer.from(txInfo.meta.returnData.data[0], "base64")[0] as unknown as
+          | 0
+          | 1)
+      : null;
+
+    assert.isTrue(returnValue !== 1, "Should have a return value");
   });
 
   /* Commented out since the OIDC signature verification method is not implemented

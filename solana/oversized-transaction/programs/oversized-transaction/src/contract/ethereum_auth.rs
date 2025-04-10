@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::secp256k1_recover::{secp256k1_recover, Secp256k1Pubkey};
+use anchor_lang::solana_program::secp256k1_recover::secp256k1_recover;
 use hex;
+use libsecp256k1::{PublicKey, PublicKeyFormat};
 use sha3::{Digest, Keccak256};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -11,163 +12,121 @@ pub struct WalletValidationData {
 
 fn eth_signed_message_hash(message: String) -> [u8; 32] {
     let prefix = format!("\x19Ethereum Signed Message:\n{}", message.len());
-
     let mut hasher = Keccak256::new();
     hasher.update(prefix.as_bytes());
     hasher.update(message.as_bytes());
-
     hasher.finalize().into()
-}
-
-fn normalize_key(key: &str) -> String {
-    key.strip_prefix("0x").unwrap_or(key).to_ascii_lowercase()
 }
 
 pub fn verify_ethereum_signature_impl(
     eth_data: &WalletValidationData,
     compressed_public_key: &str,
 ) -> Result<bool> {
-    let expected_pubkey = match decode_pubkey_from_hex(compressed_public_key) {
-        Ok(pk) => {
-            msg!("Successfully decoded public key");
-            pk
-        }
-        Err(e) => {
-            msg!("Failed to decode public key: {}", e);
-            return Err(ErrorCode::InvalidPublicKeyLength.into());
-        }
-    };
-
-    let message_hash = eth_signed_message_hash(eth_data.message.clone());
-
-    let (signature_bytes, recovery_id) = match parse_signature(&eth_data.signature) {
-        Ok(parsed) => {
-            msg!("Successfully parsed signature, recovery_id: {}", parsed.1);
-            parsed
-        }
-        Err(e) => {
-            msg!("Failed to parse signature: {}", e);
-            return Err(ErrorCode::InvalidSignatureFormat.into());
-        }
-    };
-
+    // Log the message being verified
     msg!(
-        "Attempting to recover public key with recovery_id: {}",
-        recovery_id
+        "Verifying Ethereum signature for message: {}",
+        eth_data.message
     );
 
-    let recovered_pubkey = match secp256k1_recover(&message_hash, recovery_id, &signature_bytes) {
-        Ok(pubkey) => {
-            msg!("Successfully recovered public key");
-            pubkey
-        }
-        Err(e) => {
-            msg!("Failed to recover public key: {:?}", e);
-            return Err(ErrorCode::PublicKeyRecoveryFailed.into());
-        }
-    };
+    // Step 1: Compute the Ethereum signed message hash
+    let message_hash = eth_signed_message_hash(eth_data.message.clone());
+    msg!("Computed message hash: {:?}", message_hash);
 
-    let result = compare_pubkeys(&recovered_pubkey, &expected_pubkey);
-    msg!("Signature verification result: {}", result);
-
-    Ok(result)
-}
-
-fn decode_pubkey_from_hex(key: &str) -> Result<[u8; 32]> {
-    let stripped = key.strip_prefix("0x").unwrap_or(key);
-    msg!("Decoding public key (stripped): {}", stripped);
-
-    let bytes = match hex::decode(stripped) {
-        Ok(b) => {
-            msg!("Successfully decoded hex, length: {}", b.len());
-            b
-        }
-        Err(e) => {
-            msg!("Failed to decode hex: {:?}", e);
-            return Err(ErrorCode::InvalidHexEncoding.into());
+    // Step 2: Decode the signature from hex string
+    let signature_bytes = match hex::decode(&eth_data.signature.replace("0x", "")) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            msg!("Error: Failed to decode signature hex string");
+            return Ok(false);
         }
     };
+    if signature_bytes.len() != 65 {
+        msg!(
+            "Error: Signature length is {}, expected 65 bytes",
+            signature_bytes.len()
+        );
+        return Ok(false);
+    }
 
-    let mut arr = [0u8; 32];
-
-    let actual_bytes = &bytes[1..];
-    arr[..actual_bytes.len()].copy_from_slice(actual_bytes);
-
-    Ok(arr)
-}
-
-fn parse_signature(signature: &str) -> Result<([u8; 64], u8)> {
-    let sig_bytes = hex::decode(signature.strip_prefix("0x").unwrap_or(signature)).unwrap();
-
-    let (r_s_bytes, v_byte) = sig_bytes.split_at(64);
-    let v = v_byte[0];
-
-    let signature = r_s_bytes;
-
+    // Step 3: Extract r, s, and v from the signature
+    let sig = &signature_bytes[0..64]; // First 64 bytes are r (32) + s (32)
+    let v = signature_bytes[64]; // Last byte is the recovery ID (v)
+                                 // Ethereum's v is typically 27 or 28; secp256k1_recover expects 0 or 1
     let recovery_id = if v >= 27 { v - 27 } else { v };
+    if recovery_id > 3 {
+        msg!("Error: Recovery ID {} is invalid, must be 0-3", recovery_id);
+        return Ok(false);
+    }
+    msg!("Extracted recovery ID: {}", recovery_id);
 
-    Ok((signature.try_into().unwrap(), recovery_id))
-}
+    // Step 4: Recover the public key from the signature
+    let recovered_pubkey = match secp256k1_recover(&message_hash, recovery_id, sig) {
+        Ok(pubkey) => pubkey,
+        Err(_) => {
+            msg!("Error: Failed to recover public key from signature");
+            return Ok(false);
+        }
+    };
+    msg!("Recovered public key: {:?}", recovered_pubkey.0);
 
-fn compress_pubkey(pubkey: &[u8]) -> [u8; 33] {
-    let mut compressed = [0u8; 33];
+    // Step 5: Decode the provided compressed public key
+    let compressed_pubkey_bytes = match hex::decode(compressed_public_key.replace("0x", "")) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            msg!("Error: Failed to decode compressed public key hex string");
+            return Ok(false);
+        }
+    };
+    if compressed_pubkey_bytes.len() != 33 {
+        msg!(
+            "Error: Compressed public key length is {}, expected 33 bytes",
+            compressed_pubkey_bytes.len()
+        );
+        return Ok(false);
+    }
 
-    let y_is_odd = pubkey[63] & 1 == 1;
-    compressed[0] = if y_is_odd { 0x03 } else { 0x02 };
+    // Step 6: Parse and decompress the provided public key
+    let public_key =
+        match PublicKey::parse_slice(&compressed_pubkey_bytes, Some(PublicKeyFormat::Compressed)) {
+            Ok(pk) => pk,
+            Err(_) => {
+                msg!("Error: Failed to parse compressed public key");
+                return Ok(false);
+            }
+        };
+    let serialized = public_key.serialize(); // 65 bytes with 0x04 prefix
+    if serialized.len() != 65 || serialized[0] != 0x04 {
+        msg!("Error: Unexpected serialized public key format");
+        return Ok(false);
+    }
+    let uncompressed_pubkey = &serialized[1..65]; // Remove 0x04 prefix to get 64 bytes
+    msg!(
+        "Provided public key (uncompressed): {:?}",
+        uncompressed_pubkey
+    );
 
-    compressed[1..33].copy_from_slice(&pubkey[0..32]);
-
-    compressed
-}
-
-fn compare_pubkeys(recovered: &Secp256k1Pubkey, expected: &[u8; 32]) -> bool {
-    let recovered_bytes = recovered.to_bytes();
-
-    msg!("Recovered bytes: {:?}", recovered_bytes);
-    msg!("Expected bytes: {:?}", expected);
-
-    let compressed_recovered = compress_pubkey(&recovered_bytes[1..]);
-
-    let mut expected_compressed = [0u8; 33];
-
-    let copy_len = expected.len().min(32);
-    expected_compressed[1..copy_len + 1].copy_from_slice(&expected[..copy_len]);
-
-    expected_compressed[0] = 0x02;
-
-    msg!("Compressed recovered: {:?}", compressed_recovered);
-    msg!("Expected compressed: {:?}", expected_compressed);
-
-    let matches = compressed_recovered == expected_compressed;
-    msg!("Public keys match: {}", matches);
-
-    matches
+    // Step 7: Compare the recovered and provided public keys
+    let is_valid = uncompressed_pubkey == &recovered_pubkey.0[..];
+    msg!("Signature verification result: {}", is_valid);
+    Ok(is_valid)
 }
 
 #[derive(Accounts)]
-#[instruction(eth_data: WalletValidationData, compressed_public_key: String)]
-pub struct VerifyEthereumSignature<'info> {
-    pub payer: Signer<'info>,
-}
+pub struct VerifyEthereumSignature {}
 
+// Custom error codes for meaningful error messages
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Invalid hex encoding in signature or public key")]
-    InvalidHexEncoding,
-    #[msg("Invalid signature length - expected 65 bytes hex encoded")]
-    InvalidSignatureLength,
     #[msg("Invalid signature format")]
     InvalidSignatureFormat,
+    #[msg("Signature length must be 65 bytes")]
+    InvalidSignatureLength,
     #[msg("Invalid recovery ID")]
     InvalidRecoveryId,
     #[msg("Failed to recover public key")]
-    PublicKeyRecoveryFailed,
-    #[msg("Signature verification failed")]
-    SignatureVerificationFailed,
-    #[msg("Public key mismatch")]
-    PublicKeyMismatch,
-    #[msg("Invalid public key length - expected 64 bytes")]
+    RecoveryFailed,
+    #[msg("Invalid public key format")]
+    InvalidPublicKeyFormat,
+    #[msg("Public key length must be 33 bytes for compressed form")]
     InvalidPublicKeyLength,
-    #[msg("Invalid message format - expected 32 byte hash")]
-    InvalidMessageFormat,
 }
