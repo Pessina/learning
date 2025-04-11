@@ -3,8 +3,8 @@ use anchor_lang::prelude::*;
 mod contract;
 
 use crate::contract::ethereum_auth::*;
-// use crate::contract::secp256k1_auth::*;
 use crate::contract::transaction_buffer::*;
+use crate::contract::webauthn_auth::*;
 
 declare_id!("8pZ3UMcQGe6GpXBppbLBE4xQDf5qmfCkvCzTNvDDXx9w");
 
@@ -68,7 +68,11 @@ pub mod oversized_transaction {
         verify_ethereum_signature_impl(&eth_data, &compressed_public_key)
     }
 
-    // pub fn verify_oidc_signature(_ctx: Context<VerifyOIDCSignature>) -> Result<bool> {
-    //     verify_oidc_signature_impl()
-    // }
+    pub fn verify_webauthn_signature(
+        _ctx: Context<VerifyWebauthnSignature>,
+        webauthn_data: WebauthnValidationData,
+        compressed_public_key: String,
+    ) -> Result<bool> {
+        verify_webauthn_signature_impl(&webauthn_data, compressed_public_key)
+    }
 }

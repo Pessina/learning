@@ -21,9 +21,9 @@ idl-build = ["anchor-lang/idl-build"]
 anchor-lang = { version = "0.31.0", features = ["init-if-needed"] }
 hex = "0.4.3"
 sha3 = "0.10.8"
-# rsa = { version = "0.9.8", features = ["sha2"] }
 schemars = "0.8.22"
-# sha2 = "0.10.8"
-# serde_json = "1.0.140"
-# Pinned for compatibility with rustc 1.79.0-dev
-# base64ct = "=1.6.0" 
+sha2 = "0.10.8"
+p256 = "0.13.2"
+borsh = "1.5.7"
+# Tagged for compatibility with Solana Program
+base64ct = "=1.6.0" 
