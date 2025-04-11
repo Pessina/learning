@@ -1,12 +1,11 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { ComputeBudgetProgram, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { OversizedTransaction } from "../target/types/oversized_transaction";
 import { assert } from "chai";
 import * as crypto from "crypto";
 import * as borsh from "borsh";
 
-// Constants to match our program's limits
 const MAX_CHUNK_SIZE = 900;
 
 class TestData {
@@ -26,14 +25,14 @@ class TestData {
   };
 }
 
-describe("oversized-transaction", () => {
+describe("Transaction Buffer", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
 
   const program = anchor.workspace
     .oversizedTransaction as Program<OversizedTransaction>;
   const provider = anchor.getProvider() as anchor.AnchorProvider;
 
-  it.skip("Stores and retrieves Borsh-serialized data up to 32kb (solana single tx heap limit)", async () => {
+  it("Stores and retrieves Borsh-serialized data up to 32kb (solana single tx heap limit)", async () => {
     const greeting =
       "Hello, Solana! This is a large test of oversized data handling with multiple chunks across multiple accounts. We'll use many different PDAs to store different parts of the data. This demonstrates our ability to handle data much larger than a single Solana account can store.";
 
@@ -51,7 +50,6 @@ describe("oversized-transaction", () => {
 
     console.log("Total serialized data size:", serializedData.length, "bytes");
 
-    // Generate a unique ID for this dataset
     const dataId = Array.from(
       anchor.web3.Keypair.generate().secretKey.slice(0, 32)
     );
@@ -59,7 +57,6 @@ describe("oversized-transaction", () => {
       crypto.createHash("sha256").update(serializedData).digest()
     );
 
-    // Split data into appropriately sized chunks
     const chunks: Buffer[] = [];
     for (let i = 0; i < serializedData.length; i += MAX_CHUNK_SIZE) {
       chunks.push(
@@ -95,12 +92,11 @@ describe("oversized-transaction", () => {
             dataId,
             i,
             chunks.length,
-            dataHash, // Same hash for integrity verification
+            dataHash,
             Buffer.from(chunks[i])
           )
           .accounts({
             payer: provider.wallet.publicKey,
-            // unified_storage is derived by Anchor
           })
           .rpc();
       }
@@ -119,7 +115,6 @@ describe("oversized-transaction", () => {
       program.programId
     );
 
-    // Verify metadata for this group
     const metadata = await program.methods
       .getDataMetadata()
       .accounts({
@@ -136,7 +131,6 @@ describe("oversized-transaction", () => {
 
     console.log(`Using ${chunks.length} storage accounts`);
 
-    // Retrieve and reassemble the data
     let reassembledData = Buffer.alloc(0);
 
     for (let i = 0; i < chunks.length; i++) {
@@ -168,7 +162,6 @@ describe("oversized-transaction", () => {
       }
     }
 
-    // Verify integrity of reassembled data
     const reassembledHash = Array.from(
       crypto.createHash("sha256").update(reassembledData).digest()
     );
@@ -182,7 +175,6 @@ describe("oversized-transaction", () => {
     );
     assert.isTrue(hashesMatch, "Data hash verification failed");
 
-    // Deserialize and verify data
     const deserializedData = borsh.deserialize(
       TestData.schema,
       reassembledData
@@ -202,7 +194,6 @@ describe("oversized-transaction", () => {
     console.log(`Original data size: ${serializedData.length} bytes`);
     console.log(`Reassembled data size: ${reassembledData.length} bytes`);
 
-    // Close the storage account to reclaim rent
     try {
       const tx = await program.methods
         .closeStorage()
@@ -218,7 +209,7 @@ describe("oversized-transaction", () => {
     }
   });
 
-  it.skip("Tests storage with small data in single account", async () => {
+  it("Tests storage with small data in single account", async () => {
     const data = new TestData({
       greeting: "Small data test",
       numbers: new Uint8Array(
@@ -242,7 +233,6 @@ describe("oversized-transaction", () => {
       `Storing small data (${dataSerialized.length} bytes) in a single account`
     );
 
-    // Split small data into chunks (should fit within MAX_CHUNKS_PER_ACCOUNT)
     const chunks: Buffer[] = [];
     for (let i = 0; i < dataSerialized.length; i += MAX_CHUNK_SIZE) {
       chunks.push(
@@ -300,7 +290,6 @@ describe("oversized-transaction", () => {
       program.programId
     );
 
-    // Retrieve and verify small data
     let reassembledData = Buffer.alloc(0);
 
     for (let i = 0; i < chunks.length; i++) {
@@ -338,207 +327,4 @@ describe("oversized-transaction", () => {
       "Test completed - successfully stored and retrieved data using multiple accounts"
     );
   });
-
-  // Ethereum Signature Verification Tests
-  function getCompressedPublicKey(): string {
-    return "0x0304ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7";
-  }
-
-  it.only("should validate Ethereum signature correctly", async () => {
-    const compressedPublicKey = getCompressedPublicKey();
-
-    const ethData = {
-      message:
-        '{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}',
-      signature:
-        "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d111b",
-    };
-
-    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
-      units: 1_400_000,
-    });
-
-    // Build and send the transaction
-    const txSignature = await program.methods
-      .verifyEthereumSignature(ethData, compressedPublicKey)
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .preInstructions([computeBudgetIx])
-      .rpc({
-        skipPreflight: false,
-        commitment: "confirmed",
-      });
-
-    const latestBlockhash = await provider.connection.getLatestBlockhash();
-    await provider.connection.confirmTransaction(
-      {
-        signature: txSignature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-      },
-      "confirmed"
-    );
-
-    const txInfo = (await provider.connection.getTransaction(txSignature, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    })) as unknown as {
-      meta: {
-        returnData: {
-          data: string[];
-        };
-        logMessages: string[];
-      };
-    };
-
-    console.log("txInfo", JSON.stringify(txInfo, null, 2));
-    console.log(
-      "txInfo.meta.returnData.data[0]",
-      txInfo.meta.returnData.data[0]
-    );
-
-    let returnValue = txInfo?.meta?.returnData?.data
-      ? (Buffer.from(txInfo.meta.returnData.data[0], "base64")[0] as unknown as
-          | 0
-          | 1)
-      : null;
-
-    assert.isTrue(returnValue === 1, "Should have a return value");
-  });
-
-  it.only("should fail to validate Ethereum signature with wrong public key", async () => {
-    const wrongCompressedPublicKey =
-      "0x0314ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7";
-
-    const ethData = {
-      message:
-        '{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}',
-      signature:
-        "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d111b",
-    };
-
-    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
-      units: 1_400_000,
-    });
-
-    // Build and send the transaction
-    const txSignature = await program.methods
-      .verifyEthereumSignature(ethData, wrongCompressedPublicKey)
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .preInstructions([computeBudgetIx])
-      .rpc({
-        skipPreflight: false,
-        commitment: "confirmed",
-      });
-
-    const latestBlockhash = await provider.connection.getLatestBlockhash();
-    await provider.connection.confirmTransaction(
-      {
-        signature: txSignature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-      },
-      "confirmed"
-    );
-
-    const txInfo = (await provider.connection.getTransaction(txSignature, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    })) as unknown as {
-      meta: {
-        returnData: {
-          data: string[];
-        };
-        logMessages: string[];
-      };
-    };
-
-    let returnValue = txInfo?.meta?.returnData?.data
-      ? (Buffer.from(txInfo.meta.returnData.data[0], "base64")[0] as unknown as
-          | 0
-          | 1)
-      : null;
-
-    assert.isTrue(returnValue !== 1, "Should have a return value");
-  });
-
-  it.only("should fail to validate Ethereum signature with tampered message", async () => {
-    const compressedPublicKey = getCompressedPublicKey();
-
-    const ethData = {
-      message:
-        '{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}',
-      signature:
-        "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d121b",
-    };
-
-    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
-      units: 1_400_000,
-    });
-
-    // Build and send the transaction
-    const txSignature = await program.methods
-      .verifyEthereumSignature(ethData, compressedPublicKey)
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .preInstructions([computeBudgetIx])
-      .rpc({
-        skipPreflight: false,
-        commitment: "confirmed",
-      });
-
-    const latestBlockhash = await provider.connection.getLatestBlockhash();
-    await provider.connection.confirmTransaction(
-      {
-        signature: txSignature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-      },
-      "confirmed"
-    );
-
-    const txInfo = (await provider.connection.getTransaction(txSignature, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    })) as unknown as {
-      meta: {
-        returnData: {
-          data: string[];
-        };
-        logMessages: string[];
-      };
-    };
-
-    let returnValue = txInfo?.meta?.returnData?.data
-      ? (Buffer.from(txInfo.meta.returnData.data[0], "base64")[0] as unknown as
-          | 0
-          | 1)
-      : null;
-
-    assert.isTrue(returnValue !== 1, "Should have a return value");
-  });
-
-  /* Commented out since the OIDC signature verification method is not implemented
-  it.only("should validate oidc signature correctly", async () => {
-    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
-      units: 2_000_000,
-    });
-
-    const isValid = await program.methods
-      .verifyOidcSignature()
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .preInstructions([computeBudgetIx])
-      .rpc();
-
-    console.log("isValid", isValid);
-
-    assert.isTrue(isValid, "Valid signature should verify correctly");
-  });
-  */
 });

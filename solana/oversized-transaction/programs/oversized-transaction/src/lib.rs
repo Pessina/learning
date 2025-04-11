@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 mod contract;
 
 use crate::contract::ethereum_auth::*;
-// use crate::contract::oidc_auth::*;
+// use crate::contract::secp256k1_auth::*;
 use crate::contract::transaction_buffer::*;
 
 declare_id!("8pZ3UMcQGe6GpXBppbLBE4xQDf5qmfCkvCzTNvDDXx9w");
