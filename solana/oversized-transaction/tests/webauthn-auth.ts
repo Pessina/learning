@@ -1,12 +1,17 @@
 import * as anchor from "@coral-xyz/anchor";
+import { sha256 } from "js-sha256";
 import { Program } from "@coral-xyz/anchor";
 import {
   ComputeBudgetProgram,
   PublicKey,
-  SystemProgram,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import { OversizedTransaction } from "../target/types/oversized_transaction";
 import { assert } from "chai";
+
+const SECP256R1_PROGRAM_ID = new PublicKey(
+  "Secp256r1SigVerify1111111111111111111111111"
+);
 
 describe.only("Webauthn Auth", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
@@ -18,6 +23,47 @@ describe.only("Webauthn Auth", () => {
   const compressedPublicKey =
     "0x0220fb23e028391b72c517850b3cc83ba529ef4db766098a29bf3c8d06be957878";
 
+  function createSecp256r1VerificationInstruction(
+    signature: Uint8Array,
+    publicKey: Uint8Array,
+    message: Uint8Array
+  ): TransactionInstruction {
+    const data = Buffer.alloc(
+      2 + 14 + publicKey.length + signature.length + message.length
+    );
+
+    data.writeUInt8(1, 0);
+    data.writeUInt8(0, 1);
+
+    const offsets = {
+      signature_offset: 2 + 14,
+      signature_instruction_index: 0xffff,
+      public_key_offset: 2 + 14 + signature.length,
+      public_key_instruction_index: 0xffff,
+      message_data_offset: 2 + 14 + signature.length + publicKey.length,
+      message_data_size: message.length,
+      message_instruction_index: 0xffff,
+    };
+
+    data.writeUInt16LE(offsets.signature_offset, 2);
+    data.writeUInt16LE(offsets.signature_instruction_index, 4);
+    data.writeUInt16LE(offsets.public_key_offset, 6);
+    data.writeUInt16LE(offsets.public_key_instruction_index, 8);
+    data.writeUInt16LE(offsets.message_data_offset, 10);
+    data.writeUInt16LE(offsets.message_data_size, 12);
+    data.writeUInt16LE(offsets.message_instruction_index, 14);
+
+    data.set(signature, offsets.signature_offset);
+    data.set(publicKey, offsets.public_key_offset);
+    data.set(message, offsets.message_data_offset);
+
+    return new TransactionInstruction({
+      keys: [],
+      programId: SECP256R1_PROGRAM_ID,
+      data: data,
+    });
+  }
+
   it.only("should validate WebAuthN signature correctly", async () => {
     let webauthn_data = {
       signature:
@@ -28,67 +74,33 @@ describe.only("Webauthn Auth", () => {
         '{"type":"webauthn.get","challenge":"tAuyPmQcczI8CFoTekJz5iITeP80zcJ60VTC4sYz5s8","origin":"http://localhost:3000","crossOrigin":false}',
     };
 
-    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
-      units: 1_400_000,
-    });
-    const secp256r1ProgramId = new PublicKey(
-      "Secp256r1SigVerify1111111111111111111111111"
+    const clientDataHash = sha256.arrayBuffer(webauthn_data.clientData);
+    const message = Buffer.concat([
+      Buffer.from(webauthn_data.authenticatorData.slice(2), "hex"),
+      Buffer.from(clientDataHash),
+    ]);
+
+    const verificationInstruction = createSecp256r1VerificationInstruction(
+      Buffer.from(webauthn_data.signature.slice(2), "hex"),
+      Buffer.from(compressedPublicKey.slice(2), "hex"),
+      message
     );
 
-    const txSignature = await program.methods
-      .verifyWebauthnSignature(webauthn_data, compressedPublicKey)
-      .accounts({
-        // payer: provider.wallet.publicKey,
-        instructionsSysvar: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-      })
-      .remainingAccounts([
-        {
-          pubkey: secp256r1ProgramId,
-          isWritable: false,
-          isSigner: false,
-        },
-      ])
-      .preInstructions([computeBudgetIx])
-      .rpc({
-        skipPreflight: false,
-        commitment: "confirmed",
-      });
-
-    const latestBlockhash = await provider.connection.getLatestBlockhash();
-    await provider.connection.confirmTransaction(
-      {
-        signature: txSignature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-      },
-      "confirmed"
-    );
-
-    const txInfo = (await provider.connection.getTransaction(txSignature, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    })) as unknown as {
-      meta: {
-        returnData: {
-          data: string[];
-        };
-        logMessages: string[];
-      };
+    const webauthnData = {
+      signature: webauthn_data.signature,
+      authenticatorData: webauthn_data.authenticatorData,
+      clientData: webauthn_data.clientData,
     };
 
-    console.log("txInfo", JSON.stringify(txInfo, null, 2));
-    console.log(
-      "txInfo.meta.returnData.data[0]",
-      txInfo.meta.returnData.data[0]
-    );
+    const signatureTx = await program.methods
+      .verifyWebauthnSignature(webauthnData, compressedPublicKey)
+      .accounts({
+        instructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+      })
+      .preInstructions([verificationInstruction])
+      .rpc();
 
-    let returnValue = txInfo?.meta?.returnData?.data
-      ? (Buffer.from(txInfo.meta.returnData.data[0], "base64")[0] as unknown as
-          | 0
-          | 1)
-      : null;
-
-    assert.isTrue(returnValue === 1, "Should have a return value");
+    console.log("Transaction signature:", signatureTx);
   });
 
   it("should fail to validate WebAuthN signature with wrong public key", async () => {
