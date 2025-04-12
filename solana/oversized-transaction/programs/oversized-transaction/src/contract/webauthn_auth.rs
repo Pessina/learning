@@ -22,7 +22,6 @@ pub fn verify_webauthn_signature_impl(
     webauthn_data: &WebauthnValidationData,
     compressed_public_key: String,
 ) -> Result<bool> {
-    msg!("Verifying WebAuthN signature");
     let instructions_sysvar = &ctx.accounts.instructions;
 
     let current_index = load_current_index_checked(instructions_sysvar)?;
@@ -100,8 +99,6 @@ pub fn verify_webauthn_signature_impl(
     if message_bytes != expected_signed_data.as_slice() {
         return Err(ErrorCode::SignedDataMismatch.into());
     }
-
-    msg!("Client data: {}", webauthn_data.client_data);
 
     Ok(true)
 }

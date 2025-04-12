@@ -64,8 +64,8 @@ describe.only("Webauthn Auth", () => {
     });
   }
 
-  it.only("should validate WebAuthN signature correctly", async () => {
-    let webauthn_data = {
+  it("should validate WebAuthN signature correctly", async () => {
+    let webauthnData = {
       signature:
         "0xf77969b7eaeaaed4b9a5cc5636b3755259d29d1406d8e852a8ce43dc74644da11453962702ea21a9efdd4a7077e39fcd754e3d01579493cf972f0151b6672f1f",
       authenticatorData:
@@ -74,62 +74,31 @@ describe.only("Webauthn Auth", () => {
         '{"type":"webauthn.get","challenge":"tAuyPmQcczI8CFoTekJz5iITeP80zcJ60VTC4sYz5s8","origin":"http://localhost:3000","crossOrigin":false}',
     };
 
-    const clientDataHash = sha256.arrayBuffer(webauthn_data.clientData);
+    const clientDataHash = sha256.arrayBuffer(webauthnData.clientData);
     const message = Buffer.concat([
-      Buffer.from(webauthn_data.authenticatorData.slice(2), "hex"),
+      Buffer.from(webauthnData.authenticatorData.slice(2), "hex"),
       Buffer.from(clientDataHash),
     ]);
 
     const verificationInstruction = createSecp256r1VerificationInstruction(
-      Buffer.from(webauthn_data.signature.slice(2), "hex"),
+      Buffer.from(webauthnData.signature.slice(2), "hex"),
       Buffer.from(compressedPublicKey.slice(2), "hex"),
       message
     );
 
-    const webauthnData = {
-      signature: webauthn_data.signature,
-      authenticatorData: webauthn_data.authenticatorData,
-      clientData: webauthn_data.clientData,
+    const webauthnDataArgs = {
+      signature: webauthnData.signature,
+      authenticatorData: webauthnData.authenticatorData,
+      clientData: webauthnData.clientData,
     };
 
-    const signatureTx = await program.methods
-      .verifyWebauthnSignature(webauthnData, compressedPublicKey)
+    const txSignature = await program.methods
+      .verifyWebauthnSignature(webauthnDataArgs, compressedPublicKey)
       .accounts({
         instructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
       })
       .preInstructions([verificationInstruction])
       .rpc();
-
-    console.log("Transaction signature:", signatureTx);
-  });
-
-  it("should fail to validate WebAuthN signature with wrong public key", async () => {
-    const wrongCompressedPublicKey =
-      "0x0220fb23e028391b72c517850b3cc83ba529ef4db766098a29bf3c8d06be957878";
-
-    let webauthnData = {
-      signature:
-        "0x563a2aba62db8a60c0877a87a2c6db9637bba0b7d8fd505628947e763371c01669ac141b8bc054d27a5cee9438ac7f6f11537523a6ab8affc0557b634f082cea",
-      authenticatorData:
-        "49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
-      clientData:
-        '{"type":"webauthn.get","challenge":"cmFuZG9tLWNoYWxsZW5nZQ","origin":"http://localhost:3000","crossOrigin":false}',
-    };
-
-    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
-      units: 1_400_000,
-    });
-
-    const txSignature = await program.methods
-      .verifyWebauthnSignature(webauthnData, wrongCompressedPublicKey)
-      .accounts({
-        payer: provider.wallet.publicKey,
-      })
-      .preInstructions([computeBudgetIx])
-      .rpc({
-        skipPreflight: false,
-        commitment: "confirmed",
-      });
 
     const latestBlockhash = await provider.connection.getLatestBlockhash();
     await provider.connection.confirmTransaction(
@@ -153,12 +122,96 @@ describe.only("Webauthn Auth", () => {
       };
     };
 
+    console.log("Transaction info:", JSON.stringify(txInfo, null, 2));
+
     let returnValue = txInfo?.meta?.returnData?.data
       ? (Buffer.from(txInfo.meta.returnData.data[0], "base64")[0] as unknown as
           | 0
           | 1)
       : null;
 
-    assert.isTrue(returnValue !== 1, "Should have a return value");
+    assert.isTrue(returnValue === 1, "Should have a return value");
+  });
+
+  it("should fail to validate WebAuthN signature with wrong data", async () => {
+    const wrongCompressedPublicKey =
+      "0x0220fb23e028391b72c517850b3cc83ba529ef4db766098a29bf3c8d06be957873";
+
+    let webauthnData = {
+      signature:
+        "0x563a2aba62db8a60c0877a87a2c6db9637bba0b7d8fd505628947e763371c01669ac141b8bc054d27a5cee9438ac7f6f11537523a6ab8affc0557b634f082cea",
+      authenticatorData:
+        "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
+      clientData:
+        '{"type":"webauthn.get","challenge":"cmFuZG9tLWNoYWxsZW5nZQ","origin":"http://localhost:3000","crossOrigin":false}',
+    };
+
+    const clientDataHash = sha256.arrayBuffer(webauthnData.clientData);
+    const message = Buffer.concat([
+      Buffer.from(webauthnData.authenticatorData.slice(2), "hex"),
+      Buffer.from(clientDataHash),
+    ]);
+
+    const verificationInstruction = createSecp256r1VerificationInstruction(
+      Buffer.from(webauthnData.signature.slice(2), "hex"),
+      Buffer.from(wrongCompressedPublicKey.slice(2), "hex"),
+      message
+    );
+
+    const webauthnDataArgs = {
+      signature: webauthnData.signature,
+      authenticatorData: webauthnData.authenticatorData,
+      clientData: webauthnData.clientData,
+    };
+
+    try {
+      const computeUnitsInstruction = ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: 1_400_000,
+      });
+
+      await program.methods
+        .verifyWebauthnSignature(webauthnDataArgs, wrongCompressedPublicKey)
+        .accounts({
+          instructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+        })
+        .preInstructions([computeUnitsInstruction, verificationInstruction])
+        .rpc();
+    } catch (error) {
+      assert.equal(
+        error.transactionMessage,
+        "Transaction simulation failed: Error processing Instruction 1: custom program error: 0x0"
+      );
+    }
+  });
+
+  it("should fail to validate WebAuthN signature if there is no verification instruction", async () => {
+    let webauthnData = {
+      signature:
+        "0xf77969b7eaeaaed4b9a5cc5636b3755259d29d1406d8e852a8ce43dc74644da11453962702ea21a9efdd4a7077e39fcd754e3d01579493cf972f0151b6672f1f",
+      authenticatorData:
+        "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631900000000",
+      clientData:
+        '{"type":"webauthn.get","challenge":"tAuyPmQcczI8CFoTekJz5iITeP80zcJ60VTC4sYz5s8","origin":"http://localhost:3000","crossOrigin":false}',
+    };
+
+    const webauthnDataArgs = {
+      signature: webauthnData.signature,
+      authenticatorData: webauthnData.authenticatorData,
+      clientData: webauthnData.clientData,
+    };
+
+    try {
+      await program.methods
+        .verifyWebauthnSignature(webauthnDataArgs, compressedPublicKey)
+        .accounts({
+          instructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+        })
+        .rpc();
+    } catch (error) {
+      assert.equal(
+        error.error.errorMessage,
+        "Missing secp256r1 verification instruction"
+      );
+    }
   });
 });
