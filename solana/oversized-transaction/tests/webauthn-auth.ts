@@ -1,6 +1,10 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { ComputeBudgetProgram, PublicKey } from "@solana/web3.js";
+import {
+  ComputeBudgetProgram,
+  PublicKey,
+  SystemProgram,
+} from "@solana/web3.js";
 import { OversizedTransaction } from "../target/types/oversized_transaction";
 import { assert } from "chai";
 
@@ -34,7 +38,8 @@ describe.only("Webauthn Auth", () => {
     const txSignature = await program.methods
       .verifyWebauthnSignature(webauthn_data, compressedPublicKey)
       .accounts({
-        payer: provider.wallet.publicKey,
+        // payer: provider.wallet.publicKey,
+        instructionsSysvar: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
       })
       .remainingAccounts([
         {

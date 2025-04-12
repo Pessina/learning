@@ -69,10 +69,10 @@ pub mod oversized_transaction {
     }
 
     pub fn verify_webauthn_signature(
-        _ctx: Context<VerifyWebauthnSignature>,
+        ctx: Context<VerifyWebauthnSignature>,
         webauthn_data: WebauthnValidationData,
         compressed_public_key: String,
     ) -> Result<bool> {
-        verify_webauthn_signature_impl(&webauthn_data, compressed_public_key)
+        verify_webauthn_signature_impl(&ctx, &webauthn_data, compressed_public_key)
     }
 }
