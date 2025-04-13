@@ -1,4 +1,5 @@
 import { Connection, TransactionSignature } from "@solana/web3.js";
+
 /**
  * Extracts the return value from a transaction
  * @param connection Solana connection
