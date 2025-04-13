@@ -19,6 +19,14 @@ const SECP256R1_PROGRAM_ID = new PublicKey(
 );
 
 /**
+ * Constants for secp256r1 verification instruction
+ */
+const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 14;
+const DATA_START = 2; // 1 byte for number of signatures + 1 byte for padding
+const HEADER_SIZE = DATA_START + SIGNATURE_OFFSETS_SERIALIZED_SIZE;
+const INSTRUCTION_INDEX_NOT_USED = 0xffff;
+
+/**
  * Creates a secp256r1 verification instruction for WebAuthn signatures
  */
 function createSecp256r1VerificationInstruction(
@@ -27,33 +35,28 @@ function createSecp256r1VerificationInstruction(
   message: Uint8Array
 ): TransactionInstruction {
   const data = Buffer.alloc(
-    2 + 14 + publicKey.length + signature.length + message.length
+    HEADER_SIZE + publicKey.length + signature.length + message.length
   );
 
   data.writeUInt8(1, 0); // Number of signatures
   data.writeUInt8(0, 1); // Padding
 
-  const offsets = {
-    signature_offset: 2 + 14,
-    signature_instruction_index: 0xffff,
-    public_key_offset: 2 + 14 + signature.length,
-    public_key_instruction_index: 0xffff,
-    message_data_offset: 2 + 14 + signature.length + publicKey.length,
-    message_data_size: message.length,
-    message_instruction_index: 0xffff,
-  };
+  const signatureOffset = HEADER_SIZE;
+  const publicKeyOffset = HEADER_SIZE + signature.length;
+  const messageDataOffset = HEADER_SIZE + signature.length + publicKey.length;
+  const messageDataSize = message.length;
 
-  data.writeUInt16LE(offsets.signature_offset, 2);
-  data.writeUInt16LE(offsets.signature_instruction_index, 4);
-  data.writeUInt16LE(offsets.public_key_offset, 6);
-  data.writeUInt16LE(offsets.public_key_instruction_index, 8);
-  data.writeUInt16LE(offsets.message_data_offset, 10);
-  data.writeUInt16LE(offsets.message_data_size, 12);
-  data.writeUInt16LE(offsets.message_instruction_index, 14);
+  data.writeUInt16LE(signatureOffset, 2);
+  data.writeUInt16LE(INSTRUCTION_INDEX_NOT_USED, 4);
+  data.writeUInt16LE(publicKeyOffset, 6);
+  data.writeUInt16LE(INSTRUCTION_INDEX_NOT_USED, 8);
+  data.writeUInt16LE(messageDataOffset, 10);
+  data.writeUInt16LE(messageDataSize, 12);
+  data.writeUInt16LE(INSTRUCTION_INDEX_NOT_USED, 14);
 
-  data.set(signature, offsets.signature_offset);
-  data.set(publicKey, offsets.public_key_offset);
-  data.set(message, offsets.message_data_offset);
+  data.set(signature, signatureOffset);
+  data.set(publicKey, publicKeyOffset);
+  data.set(message, messageDataOffset);
 
   return new TransactionInstruction({
     keys: [],
@@ -160,7 +163,6 @@ describe("WebAuthn Authentication", () => {
   const invalidCompressedPublicKey =
     "0x0220fb23e028391b72c517850b3cc83ba529ef4db766098a29bf3c8d06be957878";
 
-  // Sample WebAuthn data for tests
   const validWebauthnData = {
     signature:
       "0xf77969b7eaeaaed4b9a5cc5636b3755259d29d1406d8e852a8ce43dc74644da11453962702ea21a9efdd4a7077e39fcd754e3d01579493cf972f0151b6672f1f",

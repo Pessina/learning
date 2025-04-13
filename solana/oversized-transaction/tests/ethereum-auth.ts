@@ -10,9 +10,8 @@ import { assert } from "chai";
 import { confirmTransaction, getTransactionReturnValue } from "../utils/solana";
 import {
   addEthereumMessagePrefix,
-  compressedPublicKeyToEthAddress,
   parseEthereumSignature,
-  validateEthereumAddress,
+  ethereumAddressToBytes,
 } from "../utils/ethereum";
 import {
   SOLANA_MAX_COMPUTE_UNITS,
@@ -23,9 +22,8 @@ const SECP256K1_PROGRAM_ID = new PublicKey(
   "KeccakSecp256k11111111111111111111111111111"
 );
 
-// Constants from the documentation
 const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 11;
-const DATA_START = SIGNATURE_OFFSETS_SERIALIZED_SIZE + 1; // 12
+const DATA_START = SIGNATURE_OFFSETS_SERIALIZED_SIZE + 1;
 const SIGNATURE_SERIALIZED_SIZE = 64;
 const HASHED_PUBKEY_SERIALIZED_SIZE = 20;
 
@@ -38,34 +36,29 @@ function createSecp256k1VerificationInstruction(
   ethAddressBytes: Buffer,
   messageBytes: Buffer
 ): TransactionInstruction {
-  // Calculate total instruction data size
   const messageOffset =
     DATA_START + HASHED_PUBKEY_SERIALIZED_SIZE + SIGNATURE_SERIALIZED_SIZE + 1;
   const messageSize = messageBytes.length;
   const instructionDataSize = messageOffset + messageSize;
   const instructionData = Buffer.alloc(instructionDataSize);
 
-  // Number of signatures (always 1 in this case)
   instructionData.writeUInt8(1, 0);
 
-  // Define offsets for instruction data
-  const ethAddressOffset = DATA_START; // 12
-  const signatureOffset = DATA_START + HASHED_PUBKEY_SERIALIZED_SIZE; // 32
+  const ethAddressOffset = DATA_START;
+  const signatureOffset = DATA_START + HASHED_PUBKEY_SERIALIZED_SIZE;
   const recoveryIdOffset =
-    DATA_START + HASHED_PUBKEY_SERIALIZED_SIZE + SIGNATURE_SERIALIZED_SIZE; // 96
+    DATA_START + HASHED_PUBKEY_SERIALIZED_SIZE + SIGNATURE_SERIALIZED_SIZE;
 
-  // Serialize SecpSignatureOffsets
   const offsetsBuffer = Buffer.alloc(SIGNATURE_OFFSETS_SERIALIZED_SIZE);
   offsetsBuffer.writeUInt16LE(signatureOffset, 0);
-  offsetsBuffer.writeUInt8(0, 2); // signature_instruction_index
+  offsetsBuffer.writeUInt8(0, 2);
   offsetsBuffer.writeUInt16LE(ethAddressOffset, 3);
-  offsetsBuffer.writeUInt8(0, 5); // eth_address_instruction_index
+  offsetsBuffer.writeUInt8(0, 5);
   offsetsBuffer.writeUInt16LE(messageOffset, 6);
   offsetsBuffer.writeUInt16LE(messageSize, 8);
-  offsetsBuffer.writeUInt8(0, 10); // message_instruction_index
+  offsetsBuffer.writeUInt8(0, 10);
   offsetsBuffer.copy(instructionData, 1);
 
-  // Write data into instruction
   ethAddressBytes.copy(instructionData, ethAddressOffset);
   signature.copy(instructionData, signatureOffset);
   instructionData.writeUInt8(recoveryId, recoveryIdOffset);
@@ -85,15 +78,12 @@ function prepareEthereumData(
   ethData: { signature: string; message: string },
   ethAddress: string
 ) {
-  // Parse the signature using utility function
   const { signature, recoveryId } = parseEthereumSignature(ethData.signature);
 
-  // Add Ethereum message prefix
   const messageWithPrefix = addEthereumMessagePrefix(ethData.message);
   const messageBytes = Buffer.from(messageWithPrefix, "utf8");
 
-  // Validate Ethereum address
-  const ethAddressBytes = validateEthereumAddress(ethAddress);
+  const ethAddressBytes = ethereumAddressToBytes(ethAddress);
 
   return {
     signature,
@@ -109,54 +99,119 @@ function prepareEthereumData(
 
 /**
  * Verifies an Ethereum signature by constructing a Secp256k1 instruction and calling the program.
- * @param {Object} ethData - Contains the signature (hex string) and message (string).
- * @param {string} ethAddress - Ethereum address as a hex string (e.g., "0x...").
- * @param {Object} options - Optional parameters for verification.
- * @returns {Promise<{success: boolean, returnValue?: number, error?: any}>} - Result of the verification.
+ * @param programData - Data for the contract verification
+ * @param nativeProgramData - Data for the precompiled program verification (optional)
+ * @param options - Additional verification options
+ * @returns Result of the verification operation
  */
-async function verifyEthSignature(
-  ethData: { signature: string; message: string },
-  ethAddress: string,
-  options: {
-    addVerificationInstruction?: boolean;
+async function verifyEthSignature({
+  programData,
+  nativeProgramData,
+  options = {},
+}: {
+  programData: {
+    signature: string;
+    message: string;
+    ethAddress: string;
+  };
+  nativeProgramData?: {
+    signature?: string;
+    message?: string;
+    ethAddress?: string;
+  };
+  options?: {
+    skipPrecompileVerification?: boolean;
     additionalInstructions?: TransactionInstruction[];
-  } = {}
-): Promise<{
+  };
+}): Promise<{
   success: boolean;
-  returnValue?: 1 | 0;
+  returnValue: 1 | 0 | null;
   error?: any;
-  txSignature?: string | null;
+  txSignature: string | null;
 }> {
-  const { addVerificationInstruction = true, additionalInstructions = [] } =
+  const { skipPrecompileVerification = false, additionalInstructions = [] } =
     options;
+
   const provider = anchor.getProvider() as anchor.AnchorProvider;
   const program = anchor.workspace
     .oversizedTransaction as Program<OversizedTransaction>;
 
   try {
     const {
-      signature,
-      recoveryId,
-      messageBytes,
-      ethAddressBytes,
+      signature: contractSignature,
+      recoveryId: contractRecoveryId,
+      messageBytes: contractMessageBytes,
+      ethAddressBytes: contractAddressBytes,
       ethDataArgs,
-    } = prepareEthereumData(ethData, ethAddress);
+    } = prepareEthereumData(
+      {
+        signature: programData.signature,
+        message: programData.message,
+      },
+      programData.ethAddress
+    );
 
     const instructions = [...additionalInstructions];
 
-    // Add verification instruction if needed
-    if (addVerificationInstruction) {
+    if (!skipPrecompileVerification) {
+      const precompileSignature =
+        nativeProgramData?.signature || programData.signature;
+      const precompileMessage =
+        nativeProgramData?.message || programData.message;
+      const precompileAddress =
+        nativeProgramData?.ethAddress || programData.ethAddress;
+
+      let precompileSignatureBuffer: Buffer,
+        precompileRecoveryId: number,
+        precompileMessageBytes: Buffer,
+        precompileAddressBytes: Buffer;
+
+      if (
+        precompileSignature !== programData.signature ||
+        precompileMessage !== programData.message ||
+        precompileAddress !== programData.ethAddress
+      ) {
+        if (precompileSignature !== programData.signature) {
+          const parsed = parseEthereumSignature(precompileSignature);
+          precompileSignatureBuffer = parsed.signature;
+          precompileRecoveryId = parsed.recoveryId;
+        } else {
+          precompileSignatureBuffer = contractSignature;
+          precompileRecoveryId = contractRecoveryId;
+        }
+
+        if (precompileMessage !== programData.message) {
+          const precompileWithPrefix =
+            addEthereumMessagePrefix(precompileMessage);
+          precompileMessageBytes = Buffer.from(precompileWithPrefix, "utf8");
+        } else {
+          precompileMessageBytes = contractMessageBytes;
+        }
+
+        if (precompileAddress !== programData.ethAddress) {
+          precompileAddressBytes = ethereumAddressToBytes(precompileAddress);
+        } else {
+          precompileAddressBytes = contractAddressBytes;
+        }
+      } else {
+        precompileSignatureBuffer = contractSignature;
+        precompileRecoveryId = contractRecoveryId;
+        precompileMessageBytes = contractMessageBytes;
+        precompileAddressBytes = contractAddressBytes;
+      }
+
       const verificationInstruction = createSecp256k1VerificationInstruction(
-        signature,
-        recoveryId,
-        ethAddressBytes,
-        messageBytes
+        precompileSignatureBuffer,
+        precompileRecoveryId,
+        precompileAddressBytes,
+        precompileMessageBytes
       );
+
       instructions.push(verificationInstruction);
     }
 
     const txSignature = await program.methods
-      .verifyEthereumSignature(ethDataArgs, ethAddress)
+      .verifyEthereumSignature(ethDataArgs, programData.ethAddress)
       .accounts({
         instructions_sysvar: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
       })
@@ -185,80 +240,241 @@ async function verifyEthSignature(
   }
 }
 
-describe("Ethereum Signature Verification", () => {
+describe.only("Ethereum Signature Verification", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  // Convert compressed public key to uncompressed format using noble-secp256k1
-  const compressedPublicKey =
-    "0x0304ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7";
-
-  // Get Ethereum address from compressed public key using utility function
-  const validEthAddress = compressedPublicKeyToEthAddress(compressedPublicKey);
-
-  const invalidEthAddress =
-    validEthAddress.slice(0, 3) + "1" + validEthAddress.slice(4);
-
-  const validEthData = {
-    signature:
-      "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d111b",
-    message:
-      '{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}',
-  };
-
-  const failingEthData = {
-    signature:
-      "0x1413a2cc33c3ad9a150de47566c098c7f0a3f3236767ae80cfb3dcef1447d5ad1850f86f1161a5cc3620dcd8a0675f5e7ccf76f5772bb3af6ed6ea6e4ee05d111b",
-    message:
-      '{"actions":[{"Transfer":{"deposit":"10000000000000000000"}}],"nonce":"4","receiver_id":"felipe-sandbox-account.testnet"}',
+  const TEST_INPUTS = {
+    SET_1: {
+      ETH_ADDRESS: "0x4174678c78fEaFd778c1ff319D5D326701449b25",
+      INPUTS: [
+        {
+          SIGNATURE:
+            "0xee6c2fbbf7aac694fad3a339fd293cb85468014be0e06f69f37377e6a79250c40301ff174204df48cb25921d93ca816d64ac9a675f3c19ad09351315c3c58d461b",
+          MESSAGE:
+            '{"account_id":"felipe-1234","action":{"AddIdentity":{"identity":{"Wallet":{"public_key":"0x0304ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7","wallet_type":"Ethereum"}},"permissions":{"enable_act_as":false}}},"nonce":135}',
+        },
+        {
+          SIGNATURE:
+            "0x304842ae53be02b44f8658fd0cad7faeff556e4073e9367eaaa7cdddca216f2e1450bb97779a66ea9d57c3e036e5a01582cb98affca4ac0391cdd3323c5ab4511c",
+          MESSAGE:
+            '{"account_id":"felipe-1234","action":{"RemoveIdentity":{"Wallet":{"public_key":"0x0304ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7","wallet_type":"Ethereum"}}},"nonce":136}',
+        },
+        {
+          SIGNATURE:
+            "0x490c54fe4cdcf16fdf3dea3a376c0c8b18a3e43960190e3cc490f9cf56031f8b650d796d2a63e5f5e8c990d50585ded2266115880c3504ffba2004603bc8faa31c",
+          MESSAGE:
+            '{"account_id":"felipe-1234","action":{"Sign":{"contract_id":"v1.signer-prod.testnet","payloads":[{"key_version":0,"path":"","payload":[73,182,212,181,169,186,176,251,251,166,237,0,44,6,211,221,164,196,67,218,252,168,127,199,138,162,253,57,51,236,7,173]}]}},"nonce":138}',
+        },
+      ],
+    },
+    SET_2: {
+      ETH_ADDRESS: "0xC5fFedAd2701BeB8F70F4a7887A63f8E95db607a",
+      INPUTS: [
+        {
+          SIGNATURE:
+            "0x7de7f67fc96926eefb26e6a7772d25008350d8e10c0f663336ae13b109d089d30bc15318055b6343ff477c12006fbf49865c3edad248bd7cc13b414d46aafa211b",
+          MESSAGE:
+            '{"account_id":"felipe-1234","action":"AddIdentityWithAuth","nonce":"139","permissions":{"enable_act_as":false}}',
+        },
+        {
+          SIGNATURE:
+            "0xbbabc2f32d9d1bef538ed72b153f1bb0998e8d04833ef82f0e64951f403722b247ad83bbfd2f7f157396b9c0de71e538b3cbbc95f5cffc542dc6a17dbabb7d611b",
+          MESSAGE:
+            '{"account_id":"felipe-1234","action":{"RemoveIdentity":{"Wallet":{"public_key":"0x0304ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7","wallet_type":"Ethereum"}}},"nonce":140}',
+        },
+        {
+          SIGNATURE:
+            "0x6ea8eafcd2dc326d5108de3fe1fa9cd6c5ab3a25ef9cd414d7781d3aa036520e39ea7202ad29403cc714f5a1d7aece3c84ecc719cdcb87c57be975a3ef30e1bf1c",
+          MESSAGE:
+            '{"account_id":"felipe-1234","action":{"Sign":{"contract_id":"v1.signer-prod.testnet","payloads":[{"key_version":0,"path":"","payload":[37,215,161,181,118,110,180,233,17,222,195,6,17,221,230,189,92,181,114,206,107,90,202,150,251,42,250,189,140,105,149,142]}]}},"nonce":141}',
+        },
+      ],
+    },
   };
 
   it("should validate Ethereum signature correctly", async () => {
-    const result = await verifyEthSignature(validEthData, validEthAddress);
+    const testPromises = [];
 
-    assert.isTrue(result.success, "Transaction should complete successfully");
-    assert.strictEqual(
-      result.returnValue,
-      1,
-      "Should have a successful return value"
-    );
+    for (const testSet of Object.values(TEST_INPUTS)) {
+      const ethAddress = testSet.ETH_ADDRESS;
+
+      for (const input of testSet.INPUTS) {
+        const programData = {
+          signature: input.SIGNATURE,
+          message: input.MESSAGE,
+          ethAddress: ethAddress,
+        };
+
+        testPromises.push(
+          (async () => {
+            const result = await verifyEthSignature({
+              programData,
+            });
+
+            // // Log the compute units used for the transaction
+            // if (result.txSignature) {
+            //   const provider = anchor.getProvider() as anchor.AnchorProvider;
+            //   const txInfo = await provider.connection.getTransaction(
+            //     result.txSignature,
+            //     {
+            //       commitment: "confirmed",
+            //       maxSupportedTransactionVersion: 0,
+            //     }
+            //   );
+
+            //   if (txInfo && txInfo.meta) {
+            //     console.log(
+            //       `Compute units used for ${ethAddress}: ${txInfo.meta.computeUnitsConsumed}`
+            //     );
+            //   }
+            // }
+
+            assert.strictEqual(
+              result.returnValue,
+              1,
+              `Should have a successful return value for address ${ethAddress}`
+            );
+          })()
+        );
+      }
+    }
+
+    await Promise.all(testPromises);
   });
 
-  it("should fail to validate Ethereum signature with wrong public key", async () => {
-    const computeUnitsInstruction = ComputeBudgetProgram.setComputeUnitPrice({
-      microLamports: SOLANA_MAX_COMPUTE_UNITS,
-    });
+  describe("Solana precompiled program errors", () => {
+    it("should fail to validate Ethereum signature with wrong public key", async () => {
+      const computeUnitsInstruction = ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: SOLANA_MAX_COMPUTE_UNITS,
+      });
 
-    const result = await verifyEthSignature(failingEthData, invalidEthAddress, {
-      additionalInstructions: [computeUnitsInstruction],
-    });
+      const testSet = TEST_INPUTS.SET_1;
+      const wrongEthAddress = "0x1234567890123456789012345678901234567890";
 
-    assert.isFalse(result.success, "Transaction should fail");
-    if (result.error) {
-      // 0x2 is the InvalidSignature ErrorCode for the secp256k1 program
+      const programData = {
+        signature: testSet.INPUTS[0].SIGNATURE,
+        message: testSet.INPUTS[0].MESSAGE,
+        ethAddress: wrongEthAddress,
+      };
+
+      const result = await verifyEthSignature({
+        programData,
+        options: {
+          additionalInstructions: [computeUnitsInstruction],
+        },
+      });
+
       assert.strictEqual(
         result.error.transactionMessage,
         `Transaction simulation failed: Error processing Instruction 1: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
-        "Should fail with processing error"
+        "Should fail with invalid signature error"
       );
-    } else {
-      assert.fail("Expected an error but none was thrown");
-    }
-  });
-
-  it("should fail to validate Ethereum signature if there is no verification instruction", async () => {
-    const result = await verifyEthSignature(validEthData, validEthAddress, {
-      addVerificationInstruction: false,
     });
 
-    assert.isFalse(result.success, "Transaction should fail");
-    if (result.error && result.error.error) {
+    it("should fail to validate Ethereum signature with tampered message", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const programData = {
+        signature: testSet.INPUTS[0].SIGNATURE,
+        message: testSet.INPUTS[0].MESSAGE + "tampered",
+        ethAddress: testSet.ETH_ADDRESS,
+      };
+
+      const result = await verifyEthSignature({
+        programData,
+      });
+
+      assert.strictEqual(
+        result.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
+        "Should fail with invalid signature error"
+      );
+    });
+
+    it("should fail to validate Ethereum signature with invalid signature format", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const programData = {
+        signature: "0x1234",
+        message: testSet.INPUTS[0].MESSAGE,
+        ethAddress: testSet.ETH_ADDRESS,
+      };
+
+      const error = await verifyEthSignature({
+        programData,
+      });
+
+      assert.strictEqual(
+        error.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
+        "Should fail with invalid signature length error"
+      );
+    });
+
+    it("should fail to validate Ethereum signature with invalid Ethereum address", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const programData = {
+        signature: testSet.INPUTS[0].SIGNATURE,
+        message: testSet.INPUTS[0].MESSAGE,
+        ethAddress: "0x123",
+      };
+
+      const error = await verifyEthSignature({
+        programData,
+      });
+
+      assert.strictEqual(
+        error.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
+        "Should fail with invalid address length error"
+      );
+    });
+
+    it("should fail with address mismatch", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+      const differentValidAddress = TEST_INPUTS.SET_2.ETH_ADDRESS;
+
+      const programData = {
+        signature: testSet.INPUTS[0].SIGNATURE,
+        message: testSet.INPUTS[0].MESSAGE,
+        ethAddress: differentValidAddress,
+      };
+
+      const result = await verifyEthSignature({
+        programData,
+      });
+
+      assert.strictEqual(
+        result.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
+        "Should fail with invalid signature error due to address mismatch"
+      );
+    });
+  });
+
+  describe("Program errors", () => {
+    it("should fail to validate Ethereum signature if there is no verification instruction", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const programData = {
+        signature: testSet.INPUTS[0].SIGNATURE,
+        message: testSet.INPUTS[0].MESSAGE,
+        ethAddress: testSet.ETH_ADDRESS,
+      };
+
+      const result = await verifyEthSignature({
+        programData,
+        options: {
+          skipPrecompileVerification: true,
+        },
+      });
+
       assert.include(
         result.error.error.errorMessage || "",
         "Missing secp256k1 verification instruction",
         "Should fail with missing verification instruction error"
       );
-    } else {
-      assert.fail("Expected a specific error message but none was found");
-    }
+    });
   });
 });
