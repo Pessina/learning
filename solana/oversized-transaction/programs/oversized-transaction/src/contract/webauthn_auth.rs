@@ -59,8 +59,13 @@ pub fn verify_webauthn_signature_impl(
         return Err(ErrorCode::InvalidInstructionData.into());
     }
     let offsets_data = &data[offsets_start..offsets_end];
+
+    msg!("offsets_data: {:?}", data);
+
     let offsets: &Secp256r1SignatureOffsets =
         bytemuck::try_from_bytes(offsets_data).map_err(|_| ErrorCode::InvalidOffsets)?;
+
+    msg!("called here");
 
     // Ensure data is in the current instruction
     if offsets.signature_instruction_index != u16::MAX
@@ -74,6 +79,7 @@ pub fn verify_webauthn_signature_impl(
     let pubkey_start = offsets.public_key_offset as usize;
     let pubkey_end = pubkey_start + 33;
     if pubkey_end > data.len() {
+        msg!("pubkey_end: {}", pubkey_end);
         return Err(ErrorCode::InvalidOffsets.into());
     }
     let pubkey_bytes = &data[pubkey_start..pubkey_end];
@@ -89,6 +95,7 @@ pub fn verify_webauthn_signature_impl(
     let message_start = offsets.message_data_offset as usize;
     let message_end = message_start + offsets.message_data_size as usize;
     if message_end > data.len() {
+        msg!("message_end: {}", message_end);
         return Err(ErrorCode::InvalidOffsets.into());
     }
     let message_bytes = &data[message_start..message_end];
