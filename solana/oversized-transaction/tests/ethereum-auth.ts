@@ -528,6 +528,44 @@ describe.only("Ethereum Signature Verification", () => {
       );
     });
 
+    it.only("should fail when calling a different program instead of secp256k1", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const wrongProgramId = new PublicKey(
+        "Secp256r1SigVerify1111111111111111111111111"
+      );
+
+      const fakeInstruction = new TransactionInstruction({
+        keys: [],
+        programId: wrongProgramId,
+        data: Buffer.from(
+          "01001000ffff5000ffff71004500fffff77969b7eaeaaed4b9a5cc5636b3755259d29d1406d8e852a8ce43dc74644da11453962702ea21a9efdd4a7077e39fcd754e3d01579493cf972f0151b6672f1f0220fb23e028391b72c517850b3cc83ba529ef4db766098a29bf3c8d06be95787849960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d976319000000003c68c62d9fa1fb08819abcb3e7c184eff0fa41df9b9d29375768bbd03d76aa39",
+          "hex"
+        ),
+      });
+
+      const programData = {
+        signature: testSet.INPUTS[0].SIGNATURE,
+        message: testSet.INPUTS[0].MESSAGE,
+        ethAddress: testSet.ETH_ADDRESS,
+      };
+
+      const result = await verifyEthSignature({
+        programData,
+        options: {
+          skipPrecompileVerification: true,
+          additionalInstructions: [fakeInstruction],
+        },
+      });
+
+      assert.include(
+        result.error.error.errorMessage || "",
+        "Invalid verification instruction program ID",
+        "Should fail with invalid verification instruction error when using wrong program ID"
+      );
+    });
+
+    // TODO: I believe we don't need to check that the signature on our Program args is the same as the signature in the precompile, as we already know the message was signed by the address provided
     // it.only("should fail when signature in precompile differs from signature in contract", async () => {
     //   const testSet = TEST_INPUTS.SET_1;
     //   const testSet2 = TEST_INPUTS.SET_2;
