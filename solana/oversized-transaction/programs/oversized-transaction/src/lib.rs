@@ -6,6 +6,8 @@ use crate::contract::ethereum_auth::*;
 use crate::contract::transaction_buffer::*;
 use crate::contract::webauthn_auth::*;
 
+// use solana_precompile_error::PrecompileError;
+
 declare_id!("8pZ3UMcQGe6GpXBppbLBE4xQDf5qmfCkvCzTNvDDXx9w");
 
 #[program]
@@ -66,7 +68,7 @@ pub mod oversized_transaction {
         eth_data: WalletValidationData,
         compressed_public_key: String,
     ) -> Result<bool> {
-        verify_ethereum_signature_impl(&eth_data, &compressed_public_key)
+        verify_ethereum_signature_impl(&_ctx, &eth_data, &compressed_public_key)
     }
 
     pub fn verify_webauthn_signature(

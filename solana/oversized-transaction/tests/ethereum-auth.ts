@@ -476,5 +476,84 @@ describe.only("Ethereum Signature Verification", () => {
         "Should fail with missing verification instruction error"
       );
     });
+
+    it("should fail when message in precompile differs from message in contract", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const programData = {
+        signature: testSet.INPUTS[0].SIGNATURE,
+        message: testSet.INPUTS[0].MESSAGE + " modified",
+        ethAddress: testSet.ETH_ADDRESS,
+      };
+
+      const nativeProgramData = {
+        message: testSet.INPUTS[0].MESSAGE,
+      };
+
+      const result = await verifyEthSignature({
+        programData,
+        nativeProgramData,
+      });
+
+      assert.include(
+        result.error.error.errorMessage || "",
+        "Message mismatch",
+        "Should fail with message mismatch error in contract while precompile verification passes"
+      );
+    });
+
+    it("should fail when ethereum address in precompile differs from address in contract", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+      const testSet2 = TEST_INPUTS.SET_2;
+
+      const programData = {
+        signature: testSet.INPUTS[0].SIGNATURE,
+        message: testSet.INPUTS[0].MESSAGE,
+        ethAddress: testSet2.ETH_ADDRESS,
+      };
+
+      const nativeProgramData = {
+        ethAddress: testSet.ETH_ADDRESS,
+      };
+
+      const result = await verifyEthSignature({
+        programData,
+        nativeProgramData,
+      });
+
+      assert.include(
+        result.error.error.errorMessage || "",
+        "Ethereum address mismatch",
+        "Should fail with address mismatch error in contract while precompile verification passes"
+      );
+    });
+
+    // it.only("should fail when signature in precompile differs from signature in contract", async () => {
+    //   const testSet = TEST_INPUTS.SET_1;
+    //   const testSet2 = TEST_INPUTS.SET_2;
+
+    //   const programData = {
+    //     signature: testSet2.INPUTS[0].SIGNATURE,
+    //     message: testSet.INPUTS[0].MESSAGE,
+    //     ethAddress: testSet.ETH_ADDRESS,
+    //   };
+
+    //   const nativeProgramData = {
+    //     signature: testSet.INPUTS[0].SIGNATURE,
+    //   };
+
+    //   const result = await verifyEthSignature({
+    //     programData,
+    //     nativeProgramData,
+    //   });
+
+    //   console.log(result);
+
+    //   assert.include(
+    //     result.error.error.errorMessage || "",
+    //     "Address mismatch",
+    //     "Should fail with address mismatch error in contract while precompile verification passes"
+    //   );
+    // });
   });
 });
