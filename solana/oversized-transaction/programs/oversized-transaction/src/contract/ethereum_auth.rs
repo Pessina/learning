@@ -106,7 +106,7 @@ pub fn verify_ethereum_signature_impl(
         return Err(ErrorCode::AddressMismatch.into());
     }
     if message != eth_data.message.as_bytes() {
-        return Err(ErrorCode::MessageHashMismatch.into());
+        return Err(ErrorCode::MessageMismatch.into());
     }
 
     Ok(true)
@@ -142,7 +142,7 @@ pub enum ErrorCode {
     #[msg("Ethereum address mismatch")]
     AddressMismatch,
     #[msg("Message mismatch")]
-    MessageHashMismatch,
+    MessageMismatch,
     #[msg("Invalid message size")]
     InvalidMessageSize,
 }
