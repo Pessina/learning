@@ -4,8 +4,12 @@ import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { OversizedTransaction } from "../target/types/oversized_transaction";
 import { assert } from "chai";
 import { getTransactionReturnValue } from "../utils/solana";
-import { publicKeyToAddress } from "viem/accounts";
-import * as elliptic from "elliptic";
+import {
+  addEthereumMessagePrefix,
+  compressedPublicKeyToEthAddress,
+  parseEthereumSignature,
+  validateEthereumAddress,
+} from "../utils/ethereum";
 
 const SECP256K1_PROGRAM_ID = new PublicKey(
   "KeccakSecp256k11111111111111111111111111111"
@@ -30,34 +34,17 @@ async function verifyEthSignature(
   const provider = anchor.getProvider();
   const program = anchor.workspace.oversizedTransaction;
 
-  // Parse the signature (65 bytes: 64 bytes signature + 1 byte recovery ID)
-  const signatureHex = ethData.signature.slice(2); // Remove '0x'
-  const signatureBytes = Buffer.from(signatureHex, "hex");
-  if (signatureBytes.length !== 65) {
-    throw new Error(
-      `Invalid signature length: expected 65 bytes, got ${signatureBytes.length}`
-    );
-  }
-  const signature = signatureBytes.slice(0, 64); // First 64 bytes
-  const v = signatureBytes[64]; // Last byte is v
-  const recoveryId = v - 27; // Convert Ethereum v (27 or 28) to recovery ID (0 or 1)
-  if (recoveryId < 0 || recoveryId > 3) {
-    throw new Error(`Invalid recovery ID: ${recoveryId}`);
-  }
+  // Parse the signature using utility function
+  const { signature, recoveryId } = parseEthereumSignature(ethData.signature);
 
-  // Convert message to bytes
-  // Compute the Ethereum signed message hash with prefix
-  const prefix = `\x19Ethereum Signed Message:\n${ethData.message.length}`;
-  const messageWithPrefix = prefix + ethData.message;
+  // Add Ethereum message prefix
+  const messageWithPrefix = addEthereumMessagePrefix(ethData.message);
   const messageBytes = Buffer.from(messageWithPrefix, "utf8");
 
-  // Parse Ethereum address (20 bytes)
-  const ethAddressBytes = Buffer.from(ethAddress.slice(2), "hex");
-  if (ethAddressBytes.length !== 20) {
-    throw new Error(
-      `Invalid Ethereum address length: expected 20 bytes, got ${ethAddressBytes.length}`
-    );
-  }
+  ethData.message = messageWithPrefix;
+
+  // Validate Ethereum address
+  const ethAddressBytes = validateEthereumAddress(ethAddress);
 
   // Define offsets for instruction data
   const ethAddressOffset = DATA_START; // 12
@@ -136,12 +123,8 @@ describe.only("Ethereum Signature Verification", () => {
   const compressedPublicKey =
     "0x0304ab3cb2897344aa3f6ffaac94e477aeac170b9235d2416203e2a72bc9b8a7c7";
 
-  // Use elliptic library to convert compressed public key to uncompressed format
-  const ec = new elliptic.ec("secp256k1");
-  const keyPair = ec.keyFromPublic(compressedPublicKey.slice(2), "hex");
-  const publicKey = keyPair.getPublic().encode("hex", false);
-
-  const validEthAddress = publicKeyToAddress(`0x${publicKey}`);
+  // Get Ethereum address from compressed public key using utility function
+  const validEthAddress = compressedPublicKeyToEthAddress(compressedPublicKey);
 
   const invalidEthAddress =
     validEthAddress.slice(0, 3) + "1" + validEthAddress.slice(4);
