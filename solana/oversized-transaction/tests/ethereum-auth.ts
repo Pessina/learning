@@ -240,7 +240,7 @@ async function verifyEthSignature({
   }
 }
 
-describe.only("Ethereum Signature Verification", () => {
+describe("Ethereum Signature Verification", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
 
   const TEST_INPUTS = {
@@ -528,7 +528,7 @@ describe.only("Ethereum Signature Verification", () => {
       );
     });
 
-    it.only("should fail when calling a different program instead of secp256k1", async () => {
+    it("should fail when calling a different program instead of secp256k1", async () => {
       const testSet = TEST_INPUTS.SET_1;
 
       const wrongProgramId = new PublicKey(
