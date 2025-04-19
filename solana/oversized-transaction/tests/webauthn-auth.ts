@@ -282,7 +282,7 @@ describe("WebAuthn Authentication", () => {
     },
   };
 
-  it.only("should validate WebAuthn signature correctly", async () => {
+  it("should validate WebAuthn signature correctly", async () => {
     const testPromises = [];
 
     for (const testSet of Object.values(TEST_INPUTS)) {
