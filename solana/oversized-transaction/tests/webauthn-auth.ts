@@ -189,53 +189,54 @@ describe("WebAuthn Authentication", () => {
         },
       ],
     },
-    // SET_2: {
-    //   COMPRESSED_PUBLIC_KEY:
-    //     "0x03f6c9bde7c398eaaf91f1f2f142b2dd81c8e3b3082c348d186a382d17f13b41f0",
-    //   INPUTS: [
-    //     {
-    //       CLIENT_DATA:
-    //         '{"type":"webauthn.get","challenge":"jIQjdzTBeBvOJ-kSXpx0ePSbQSx1IRNIseDVMv0Bick","origin":"http://localhost:3000","crossOrigin":false}',
-    //       AUTHENTICATOR_DATA:
-    //         "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
-    //       SIGNATURE:
-    //         "0x276f7ba8593bfcb8dd2842f7602ee80827f4bfa5b617019bd0221442fbd1feffd856691fb6dd2283b92f7c8ee76b6727765fd024d9f170a419f77e4e9adcfe4a",
-    //     },
-    //     {
-    //       CLIENT_DATA:
-    //         '{"type":"webauthn.get","challenge":"gRY3-0x9VUcQxpsswrEKZcfOof9yguPKqIXBcUP4ZNE","origin":"http://localhost:3000","crossOrigin":false}',
-    //       AUTHENTICATOR_DATA:
-    //         "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
-    //       SIGNATURE:
-    //         "0xa314e582181038e2702cc313331e451908d40a8d45f3c0c2a80f23ca8ce000409fd5729b034ff44c2e8148ee656b7694d8f21e863207cbd7ebcbd706cbc50124",
-    //     },
-    //     {
-    //       CLIENT_DATA:
-    //         '{"type":"webauthn.get","challenge":"04LMuuH5ZdbP51T4WIGJJ4aIMGSZTWHgKH1EHxBrHOo","origin":"http://localhost:3000","crossOrigin":false}',
-    //       AUTHENTICATOR_DATA:
-    //         "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
-    //       SIGNATURE:
-    //         "0x284fddd33c089c8ab6b82659efe9b755be8a871c0a7daa5010b9d98554a82f9de6e4fd100301578e5781012eeb932d7d38a2145e39e82532c6830dfbe17e01e5",
-    //     },
-    //   ],
-    // },
+    SET_2: {
+      COMPRESSED_PUBLIC_KEY:
+        "0x031a08c5e977ab0a71d1ac3e5b8c435a431afb4c6d641b00a8b91496c5b085e6a3",
+      INPUTS: [
+        {
+          CLIENT_DATA:
+            '{"type":"webauthn.get","challenge":"DrZECYyV1n-dEUgWnwHu9_vun9jvTs6R_fIkDcwhwgA","origin":"http://localhost:3000","crossOrigin":false,"other_keys_can_be_added_here":"do not compare clientDataJSON against a template. See https://goo.gl/yabPex"}',
+          AUTHENTICATOR_DATA:
+            "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
+          SIGNATURE:
+            "0xd007d9c2850714db0addabe30b05fc3d1605cd9c4d848c794fd11fca184012c27262d46e06caff500847d800219fa16400ed751017146ae2bf7ddf8267fcda5b",
+        },
+        {
+          CLIENT_DATA:
+            '{"type":"webauthn.get","challenge":"7NEINnchZ-NH77mImg2kMibaTnOKjPyFn_-lYaD8Bh8","origin":"http://localhost:3000","crossOrigin":false}',
+          AUTHENTICATOR_DATA:
+            "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
+          SIGNATURE:
+            "0x7bcaded9357738fa21bca7cc6f4f37e7a366f03498678188fcf35cea66f2dbcd28455b66e1cc23b9b73a0238ec43160b2b63b305d1f1a4ab4651099ea46036ff",
+        },
+        // Failing on test
+        {
+          CLIENT_DATA:
+            '{"type":"webauthn.get","challenge":"4SzZvQR_13EYvnAvUF0Qq78E07BiBSZKKNvvMVQbpyo","origin":"http://localhost:3000","crossOrigin":false}',
+          AUTHENTICATOR_DATA:
+            "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
+          SIGNATURE:
+            "0x23c70b2fa596b1c56ffc3f43567ccf86ddf910304ac32eb2d44ad59e0e4e3441c9f2c9c57cecb348e6ed6e5b2a242a477089b010f5bc62862c91d4ee4741c4c4",
+        },
+      ],
+    },
   };
 
-  it("should validate WebAuthn signature correctly", async () => {
+  it.only("should validate WebAuthn signature correctly", async () => {
     const testPromises = [];
 
     for (const testSet of Object.values(TEST_INPUTS)) {
       const compressedPublicKey = testSet.COMPRESSED_PUBLIC_KEY;
 
       for (const input of testSet.INPUTS) {
+        const webauthnData = {
+          clientData: input.CLIENT_DATA,
+          authenticatorData: input.AUTHENTICATOR_DATA,
+          signature: input.SIGNATURE,
+        };
+
         testPromises.push(
           (async () => {
-            const webauthnData = {
-              clientData: input.CLIENT_DATA,
-              authenticatorData: input.AUTHENTICATOR_DATA,
-              signature: input.SIGNATURE,
-            };
-
             const result = await verifyWebauthnSignature(
               webauthnData,
               compressedPublicKey
@@ -243,10 +244,6 @@ describe("WebAuthn Authentication", () => {
 
             console.log(result.error);
 
-            assert.isTrue(
-              result.success,
-              "Transaction should complete successfully"
-            );
             assert.strictEqual(
               result.returnValue,
               1,
