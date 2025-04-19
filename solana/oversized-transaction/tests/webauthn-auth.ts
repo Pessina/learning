@@ -1,4 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
+import { p256 } from "@noble/curves/p256";
 import { createHash } from "crypto";
 import { Program } from "@coral-xyz/anchor";
 import {
@@ -13,14 +14,12 @@ import {
   SOLANA_MAX_COMPUTE_UNITS,
   SOLANA_PRE_COMPILED_ERRORS,
 } from "../utils/constants";
+import { toHex } from "viem";
 
 const SECP256R1_PROGRAM_ID = new PublicKey(
   "Secp256r1SigVerify1111111111111111111111111"
 );
 
-/**
- * Constants for secp256r1 verification instruction
- */
 const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 14; // 7 fields * 2 bytes each
 const DATA_START = 2; // 1 byte for number of signatures + 1 byte for padding
 const HEADER_SIZE = DATA_START + SIGNATURE_OFFSETS_SERIALIZED_SIZE;
@@ -98,51 +97,32 @@ function prepareWebAuthnData(webauthnData: {
   };
 }
 
-/**
- * Function to analyze signatures and compare them for debugging
- */
-function analyzeSignature(signature: string): { r: Buffer; s: Buffer } {
-  const sigBuffer = Buffer.from(signature.slice(2), "hex");
+// Function to normalize an ECDSA signature by ensuring s is in the lower range
+export function normalizeSignature(signature: string): string {
+  const sigHex = signature.slice(2);
+  let sigBuffer = Buffer.from(sigHex, "hex");
+
   const r = sigBuffer.slice(0, 32);
   const s = sigBuffer.slice(32, 64);
 
-  return { r, s };
-}
+  // Check if s is in the upper range and normalize if needed
+  const n = p256.CURVE.n;
+  const sBigInt = BigInt("0x" + s.toString("hex"));
 
-/**
- * Function to normalize an ECDSA signature by ensuring s is in the lower range
- * When s is in the upper range, we replace it with N - s as per ECDSA standard
- */
-function normalizeSignature(signature: string): string {
-  const { r, s } = analyzeSignature(signature);
-
-  // N is the order of the secp256r1 curve
-  const N = Buffer.from(
-    "FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551",
-    "hex"
-  );
-  const halfN = Buffer.from(
-    "7FFFFFFF800000007FFFFFFFFFFFFFFFDE73D56D538CF427D9CE5617E3192A8",
-    "hex"
-  );
-
-  // Check if s is in the upper range
-  if (Buffer.compare(s, halfN) > 0) {
-    // Calculate N - s
-    const sBigInt = BigInt("0x" + s.toString("hex"));
-    const nBigInt = BigInt("0x" + N.toString("hex"));
-    const newSBigInt = nBigInt - sBigInt;
-
-    const newSHex = newSBigInt.toString(16).padStart(64, "0");
-    const newS = Buffer.from(newSHex, "hex");
-
-    // Create new signature with same r but normalized s
-    const normalizedSig = Buffer.concat([r, newS]);
-    return "0x" + normalizedSig.toString("hex");
+  // If s is in the upper range, compute n - s
+  let normalizedS = sBigInt;
+  if (sBigInt > n / BigInt(2)) {
+    normalizedS = n - sBigInt;
   }
 
-  // If s is already in the lower range, return the original signature
-  return signature;
+  const normalizedSBuffer = Buffer.from(
+    normalizedS.toString(16).padStart(64, "0"),
+    "hex"
+  );
+
+  const normalizedSig = Buffer.concat([r, normalizedSBuffer]);
+
+  return toHex(normalizedSig);
 }
 
 /**
@@ -173,7 +153,8 @@ async function verifyWebauthnSignature(
 
     if (addVerificationInstruction) {
       // Normalize the signature to ensure s is in the lower range
-      const normalizedSignature = normalizeSignature(webauthnData.signature);
+      // const normalizedSignature = normalizeSignature(webauthnData.signature);
+      const normalizedSignature = webauthnData.signature;
 
       const signatureBytes = Buffer.from(normalizedSignature.slice(2), "hex");
 
@@ -289,6 +270,14 @@ describe("WebAuthn Authentication", () => {
             "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
           SIGNATURE:
             "0x23c70b2fa596b1c56ffc3f43567ccf86ddf910304ac32eb2d44ad59e0e4e3441c9f2c9c57cecb348e6ed6e5b2a242a477089b010f5bc62862c91d4ee4741c4c4",
+        },
+        {
+          CLIENT_DATA:
+            '{"type":"webauthn.get","challenge":"t104YSAE6yY189ZssLhescOSBvoDuZrLKY0or213EWA","origin":"http://localhost:3000","crossOrigin":false}',
+          AUTHENTICATOR_DATA:
+            "0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000",
+          SIGNATURE:
+            "0xde8ea52c002f4adcfaf4d4e0d414156631363a1c09283b3fe21f775fb27be561bbddbaa8eda06979eb290326fda890a9a7ce0919aeb6b3b03999d63f8bb97155",
         },
       ],
     },
