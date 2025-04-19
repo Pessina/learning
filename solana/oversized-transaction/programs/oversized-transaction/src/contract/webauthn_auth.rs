@@ -126,7 +126,7 @@ pub struct VerifyWebauthnSignature<'info> {
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
+#[repr(C, packed)]
 pub struct Secp256r1SignatureOffsets {
     signature_offset: u16,
     signature_instruction_index: u16,
