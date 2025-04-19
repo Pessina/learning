@@ -11,35 +11,6 @@ pub struct WalletValidationData {
     pub message: String,
 }
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub struct Secp256k1SignatureOffsets {
-    pub signature_offset: u16,
-    pub signature_instruction_index: u8,
-    pub eth_address_offset: u16,
-    pub eth_address_instruction_index: u8,
-    pub message_data_offset: u16,
-    pub message_data_size: u16,
-    pub message_instruction_index: u8,
-}
-
-impl Secp256k1SignatureOffsets {
-    pub fn from_bytes(data: &[u8]) -> Result<Self> {
-        if data.len() != 11 {
-            return Err(ErrorCode::InvalidInstructionData.into());
-        }
-        Ok(Self {
-            signature_offset: u16::from_le_bytes([data[0], data[1]]),
-            signature_instruction_index: data[2],
-            eth_address_offset: u16::from_le_bytes([data[3], data[4]]),
-            eth_address_instruction_index: data[5],
-            message_data_offset: u16::from_le_bytes([data[6], data[7]]),
-            message_data_size: u16::from_le_bytes([data[8], data[9]]),
-            message_instruction_index: data[10],
-        })
-    }
-}
-
 pub fn verify_ethereum_signature_impl(
     ctx: &Context<VerifyEthereumSignature>,
     eth_data: &WalletValidationData,
@@ -110,6 +81,35 @@ pub fn verify_ethereum_signature_impl(
     }
 
     Ok(true)
+}
+
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
+pub struct Secp256k1SignatureOffsets {
+    pub signature_offset: u16,
+    pub signature_instruction_index: u8,
+    pub eth_address_offset: u16,
+    pub eth_address_instruction_index: u8,
+    pub message_data_offset: u16,
+    pub message_data_size: u16,
+    pub message_instruction_index: u8,
+}
+
+impl Secp256k1SignatureOffsets {
+    pub fn from_bytes(data: &[u8]) -> Result<Self> {
+        if data.len() != 11 {
+            return Err(ErrorCode::InvalidInstructionData.into());
+        }
+        Ok(Self {
+            signature_offset: u16::from_le_bytes([data[0], data[1]]),
+            signature_instruction_index: data[2],
+            eth_address_offset: u16::from_le_bytes([data[3], data[4]]),
+            eth_address_instruction_index: data[5],
+            message_data_offset: u16::from_le_bytes([data[6], data[7]]),
+            message_data_size: u16::from_le_bytes([data[8], data[9]]),
+            message_instruction_index: data[10],
+        })
+    }
 }
 
 // Define the accounts context
