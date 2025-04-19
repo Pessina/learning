@@ -153,8 +153,7 @@ async function verifyWebauthnSignature(
 
     if (addVerificationInstruction) {
       // Normalize the signature to ensure s is in the lower range
-      // const normalizedSignature = normalizeSignature(webauthnData.signature);
-      const normalizedSignature = webauthnData.signature;
+      const normalizedSignature = normalizeSignature(webauthnData.signature);
 
       const signatureBytes = Buffer.from(normalizedSignature.slice(2), "hex");
 
@@ -315,48 +314,4 @@ describe("WebAuthn Authentication", () => {
 
     await Promise.all(testPromises);
   });
-
-  // it("should fail to validate WebAuthn signature with wrong public key", async () => {
-  //   const computeUnitsInstruction = ComputeBudgetProgram.setComputeUnitPrice({
-  //     microLamports: SOLANA_MAX_COMPUTE_UNITS,
-  //   });
-
-  //   const result = await verifyWebauthnSignature(
-  //     failingWebauthnData,
-  //     invalidCompressedPublicKey,
-  //     {
-  //       additionalInstructions: [computeUnitsInstruction],
-  //     }
-  //   );
-
-  //   assert.isFalse(result.success, "Transaction should fail");
-  //   if (result.error) {
-  //     assert.strictEqual(
-  //       result.error.transactionMessage,
-  //       `Transaction simulation failed: Error processing Instruction 1: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
-  //       "Should fail with processing error"
-  //     );
-  //   } else {
-  //     assert.fail("Expected an error but none was thrown");
-  //   }
-  // });
-
-  // it("should fail to validate WebAuthn signature if there is no verification instruction", async () => {
-  //   const result = await verifyWebauthnSignature(
-  //     validWebauthnData,
-  //     validCompressedPublicKey,
-  //     { addVerificationInstruction: false }
-  //   );
-
-  //   assert.isFalse(result.success, "Transaction should fail");
-  //   if (result.error && result.error.error) {
-  //     assert.include(
-  //       result.error.error.errorMessage || "",
-  //       "Missing secp256r1 verification instruction",
-  //       "Should fail with missing verification instruction error"
-  //     );
-  //   } else {
-  //     assert.fail("Expected a specific error message but none was found");
-  //   }
-  // });
 });
