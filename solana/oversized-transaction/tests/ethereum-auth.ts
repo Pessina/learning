@@ -7,7 +7,11 @@ import {
 } from "@solana/web3.js";
 import { OversizedTransaction } from "../target/types/oversized_transaction";
 import { assert } from "chai";
-import { confirmTransaction, getTransactionReturnValue } from "../utils/solana";
+import {
+  confirmTransaction,
+  getTransactionReturnValue,
+  logComputeUnitsUsed,
+} from "../utils/solana";
 import {
   addEthereumMessagePrefix,
   parseEthereumSignature,
@@ -311,23 +315,10 @@ describe("Ethereum Signature Verification", () => {
               programData,
             });
 
-            // // Log the compute units used for the transaction
-            // if (result.txSignature) {
-            //   const provider = anchor.getProvider() as anchor.AnchorProvider;
-            //   const txInfo = await provider.connection.getTransaction(
-            //     result.txSignature,
-            //     {
-            //       commitment: "confirmed",
-            //       maxSupportedTransactionVersion: 0,
-            //     }
-            //   );
-
-            //   if (txInfo && txInfo.meta) {
-            //     console.log(
-            //       `Compute units used for ${ethAddress}: ${txInfo.meta.computeUnitsConsumed}`
-            //     );
-            //   }
-            // }
+            // logComputeUnitsUsed({
+            //   txSignature: result.txSignature,
+            //   compressedPublicKey: ethAddress,
+            // });
 
             assert.strictEqual(
               result.returnValue,

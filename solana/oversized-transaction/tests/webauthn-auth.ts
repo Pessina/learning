@@ -9,7 +9,11 @@ import {
 } from "@solana/web3.js";
 import { OversizedTransaction } from "../target/types/oversized_transaction";
 import { assert } from "chai";
-import { confirmTransaction, getTransactionReturnValue } from "../utils/solana";
+import {
+  confirmTransaction,
+  getTransactionReturnValue,
+  logComputeUnitsUsed,
+} from "../utils/solana";
 import {
   SOLANA_MAX_COMPUTE_UNITS,
   SOLANA_PRE_COMPILED_ERRORS,
@@ -328,6 +332,11 @@ describe("WebAuthn Authentication", () => {
                 compressedPublicKey,
               },
             });
+
+            // logComputeUnitsUsed({
+            //   txSignature: result.txSignature,
+            //   compressedPublicKey,
+            // });
 
             assert.strictEqual(
               result.returnValue,
