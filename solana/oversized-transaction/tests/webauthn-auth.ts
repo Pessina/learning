@@ -128,52 +128,87 @@ export function normalizeSignature(signature: string): string {
 /**
  * Helper function to verify WebAuthn signatures
  */
-async function verifyWebauthnSignature(
-  webauthnData: {
+async function verifyWebauthnSignature({
+  programData,
+  nativeProgramData,
+  options = {},
+}: {
+  programData: {
     signature: string;
     authenticatorData: string;
     clientData: string;
-  },
-  publicKey: string,
-  options: {
+    compressedPublicKey: string;
+  };
+  nativeProgramData?: {
+    signature?: string;
+    authenticatorData?: string;
+    clientData?: string;
+    compressedPublicKey?: string;
+  };
+  options?: {
     addVerificationInstruction?: boolean;
     additionalInstructions?: TransactionInstruction[];
-  } = {}
-) {
+  };
+}) {
   const { addVerificationInstruction = true, additionalInstructions = [] } =
     options;
+
   const program = anchor.workspace
     .oversizedTransaction as Program<OversizedTransaction>;
   const provider = anchor.getProvider() as anchor.AnchorProvider;
 
   try {
-    const { message, webauthnDataArgs } = prepareWebAuthnData(webauthnData);
+    const { message, webauthnDataArgs } = prepareWebAuthnData(programData);
 
     const instructions = [...additionalInstructions];
 
     if (addVerificationInstruction) {
+      const verificationSig =
+        nativeProgramData?.signature || programData.signature;
+      const verificationPubKey =
+        nativeProgramData?.compressedPublicKey ||
+        programData.compressedPublicKey;
+
+      let verificationMessage = message;
+      if (
+        nativeProgramData?.authenticatorData ||
+        nativeProgramData?.clientData
+      ) {
+        const nativeAuthData =
+          nativeProgramData.authenticatorData || programData.authenticatorData;
+        const nativeClientData =
+          nativeProgramData.clientData || programData.clientData;
+
+        const nativeWebAuthnDataObj = {
+          signature: verificationSig,
+          authenticatorData: nativeAuthData,
+          clientData: nativeClientData,
+        };
+
+        const { message: nativeMessage } = prepareWebAuthnData(
+          nativeWebAuthnDataObj
+        );
+        verificationMessage = nativeMessage;
+      }
+
       // Normalize the signature to ensure s is in the lower range
-      const normalizedSignature = normalizeSignature(webauthnData.signature);
-
+      const normalizedSignature = normalizeSignature(verificationSig);
       const signatureBytes = Buffer.from(normalizedSignature.slice(2), "hex");
-
-      const publicKeyBytes = Buffer.from(publicKey.slice(2), "hex");
+      const publicKeyBytes = Buffer.from(verificationPubKey.slice(2), "hex");
 
       const verificationInstruction = createSecp256r1VerificationInstruction(
         signatureBytes,
         publicKeyBytes,
-        message
+        verificationMessage
       );
       instructions.push(verificationInstruction);
     }
 
-    const computeBudgetInstruction = ComputeBudgetProgram.setComputeUnitLimit({
-      units: SOLANA_MAX_COMPUTE_UNITS,
-    });
-    instructions.unshift(computeBudgetInstruction);
-
     const txSignature = await program.methods
-      .verifyWebauthnSignature(webauthnDataArgs, publicKey)
+      .verifyWebauthnSignature(
+        webauthnDataArgs,
+        programData.compressedPublicKey
+      )
       .accounts({
         instructions_sysvar: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
       })
@@ -193,12 +228,6 @@ async function verifyWebauthnSignature(
       success: true,
     };
   } catch (error) {
-    console.error("Transaction error occurred:", error);
-
-    if (error.transactionLogs) {
-      console.error("Transaction logs:", error.transactionLogs);
-    }
-
     return {
       error,
       success: false,
@@ -208,7 +237,7 @@ async function verifyWebauthnSignature(
   }
 }
 
-describe("WebAuthn Authentication", () => {
+describe.only("WebAuthn Authentication", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
 
   const TEST_INPUTS = {
@@ -289,18 +318,16 @@ describe("WebAuthn Authentication", () => {
       const compressedPublicKey = testSet.COMPRESSED_PUBLIC_KEY;
 
       for (const input of testSet.INPUTS) {
-        const webauthnData = {
-          clientData: input.CLIENT_DATA,
-          authenticatorData: input.AUTHENTICATOR_DATA,
-          signature: input.SIGNATURE,
-        };
-
         testPromises.push(
           (async () => {
-            const result = await verifyWebauthnSignature(
-              webauthnData,
-              compressedPublicKey
-            );
+            const result = await verifyWebauthnSignature({
+              programData: {
+                clientData: input.CLIENT_DATA,
+                authenticatorData: input.AUTHENTICATOR_DATA,
+                signature: input.SIGNATURE,
+                compressedPublicKey,
+              },
+            });
 
             assert.strictEqual(
               result.returnValue,
@@ -313,5 +340,227 @@ describe("WebAuthn Authentication", () => {
     }
 
     await Promise.all(testPromises);
+  });
+
+  describe("Solana precompiled program errors", () => {
+    it("should fail to validate WebAuthn signature with wrong public key", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+      const wrongPublicKey =
+        "0x031a08c5e977ab0a71d1ac3e5b8c435a431afb4c6d641b00a8b91496c5b085e6a4"; // Different last digit
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: wrongPublicKey,
+        },
+      });
+
+      assert.strictEqual(
+        result.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_PUBLIC_KEY}`,
+        "Should fail with invalid signature error due to wrong public key"
+      );
+    });
+
+    it("should fail to validate WebAuthn signature with tampered client data", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA + "tampered",
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: testSet.COMPRESSED_PUBLIC_KEY,
+        },
+      });
+
+      assert.strictEqual(
+        result.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
+        "Should fail with invalid signature error due to tampered client data"
+      );
+    });
+
+    it("should fail to validate WebAuthn signature with tampered authenticator data", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+          authenticatorData:
+            "0x59960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000", // First byte changed
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: testSet.COMPRESSED_PUBLIC_KEY,
+        },
+      });
+
+      assert.strictEqual(
+        result.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
+        "Should fail with invalid signature error due to tampered authenticator data"
+      );
+    });
+
+    it("should fail to validate WebAuthn signature with invalid signature format", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+          signature:
+            "0xde8ea52c002f4adcfaf4d4e0d414156631363a1c09283b3fe21f775fb27be561bbddbaa8eda06979eb290326fda890a9a7ce0919aeb6b3b03999d63f8bb97154", // Changed last hex
+          compressedPublicKey: testSet.COMPRESSED_PUBLIC_KEY,
+        },
+      });
+
+      assert.strictEqual(
+        result.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
+        "Should fail with invalid signature format error"
+      );
+    });
+
+    it("should fail with public key mismatch", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+      const differentValidPublicKey = TEST_INPUTS.SET_2.COMPRESSED_PUBLIC_KEY;
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: differentValidPublicKey,
+        },
+      });
+
+      assert.strictEqual(
+        result.error.transactionMessage,
+        `Transaction simulation failed: Error processing Instruction 0: custom program error: ${SOLANA_PRE_COMPILED_ERRORS.INVALID_SIGNATURE}`,
+        "Should fail with invalid signature error due to public key mismatch"
+      );
+    });
+  });
+
+  describe("Program errors", () => {
+    it("should fail to validate WebAuthn signature if there is no verification instruction", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: testSet.COMPRESSED_PUBLIC_KEY,
+        },
+        options: { addVerificationInstruction: false },
+      });
+
+      assert.strictEqual(
+        result.error.error.errorMessage,
+        "Missing secp256r1 verification instruction",
+        "Should fail with missing verification instruction error"
+      );
+    });
+
+    it("should fail when client data in precompile differs from client data in contract", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA + " modified",
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: testSet.COMPRESSED_PUBLIC_KEY,
+        },
+        nativeProgramData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+        },
+      });
+
+      assert.strictEqual(
+        result.error.error.errorMessage || "",
+        "Signed data mismatch",
+        "Should fail with message mismatch error in contract while precompile verification passes"
+      );
+    });
+
+    it("should fail when authenticator data in precompile differs from authenticator data in contract", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+          authenticatorData:
+            "0x59960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000", // Modified first byte
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: testSet.COMPRESSED_PUBLIC_KEY,
+        },
+        nativeProgramData: {
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+        },
+      });
+
+      assert.strictEqual(
+        result.error.error.errorMessage || "",
+        "Signed data mismatch",
+        "Should fail with message mismatch error in contract while precompile verification passes"
+      );
+    });
+
+    it("should fail when public key in precompile differs from public key in contract", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+      const testSet2 = TEST_INPUTS.SET_2;
+      const wrongCompressedPublicKey = testSet2.COMPRESSED_PUBLIC_KEY;
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: wrongCompressedPublicKey,
+        },
+        nativeProgramData: {
+          compressedPublicKey: testSet.COMPRESSED_PUBLIC_KEY,
+        },
+      });
+
+      assert.strictEqual(
+        result.error.error.errorMessage || "",
+        "Public key mismatch",
+        "Should fail with public key mismatch error in contract while precompile verification passes"
+      );
+    });
+
+    it("should fail when calling a different program instead of secp256r1", async () => {
+      const testSet = TEST_INPUTS.SET_1;
+
+      const computeBudgetInstruction = ComputeBudgetProgram.setComputeUnitLimit(
+        {
+          units: SOLANA_MAX_COMPUTE_UNITS,
+        }
+      );
+
+      const result = await verifyWebauthnSignature({
+        programData: {
+          clientData: testSet.INPUTS[0].CLIENT_DATA,
+          authenticatorData: testSet.INPUTS[0].AUTHENTICATOR_DATA,
+          signature: testSet.INPUTS[0].SIGNATURE,
+          compressedPublicKey: testSet.COMPRESSED_PUBLIC_KEY,
+        },
+        options: {
+          addVerificationInstruction: false,
+          additionalInstructions: [computeBudgetInstruction],
+        },
+      });
+
+      assert.strictEqual(
+        result.error.error.errorMessage || "",
+        "Invalid verification instruction program ID",
+        "Should fail with invalid verification instruction error when using wrong program ID"
+      );
+    });
   });
 });
