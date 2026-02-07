@@ -1,7 +1,13 @@
 -- Copyright (c) 2022 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-
 module User where
+template Message with
+    sender: Party
+    receiver: Party
+    content: Text
+  where
+    signatory sender, receiver
+
 
 -- MAIN_TEMPLATE_BEGIN
 template User with
@@ -25,6 +31,13 @@ template User with
         archive self
         create this with following = userToFollow :: following
     -- FOLLOW_END
+    nonconsuming choice SendMessage: ContractId Message with
+        sender: Party
+        content: Text
+      controller sender
+      do
+        assertMsg "Designated user must follow you back to send a message" (elem sender following)
+        create Message with sender, receiver = username, content
 
 -- ALIAS_BEGIN
 template Alias with

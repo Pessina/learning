@@ -4,10 +4,10 @@
   "private": true,
   "dependencies": {
     "@daml.js/create-daml-app": "file:daml.js/create-daml-app-0.1.0",
+    "@daml/hub-react": "^1.0.0",
     "@daml/ledger": "2.10.3",
     "@daml/react": "2.10.3",
     "@daml/types": "2.10.3",
-    "@daml/hub-react": "^1.0.0",
     "dotenv": "^8.2.0",
     "jwt-simple": "^0.5.6",
     "react": "^17.0.0",
@@ -38,14 +38,20 @@
     ]
   },
   "devDependencies": {
-    "@types/minimatch": "5.1.2",
+    "@types/dotenv": "^8.2.0",
+    "@types/jest": "~29.2.3",
     "@types/jwt-simple": "^0.5.33",
+    "@types/minimatch": "5.1.2",
+    "@types/node": "~18.11.9",
+    "@types/puppeteer": "~7.0.4",
     "@types/react": "^17.0.0",
     "@types/react-dom": "^17.0.0",
-    "@types/dotenv": "^8.2.0",
-    "http-proxy-middleware": "^1.0.4",
-    "react-scripts": "^4.0.3",
+    "@types/wait-on": "~5.3.1",
     "eslint-config-react-app": "^7.0.1",
-    "typescript": "~3.8.3"
+    "http-proxy-middleware": "^1.0.4",
+    "puppeteer": "~10.0.0",
+    "react-scripts": "^4.0.3",
+    "typescript": "~3.8.3",
+    "wait-on": "~6.0.1"
   }
 }
